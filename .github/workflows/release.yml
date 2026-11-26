@@ -61,31 +61,65 @@ jobs:
       - name: Installer la CLI Tauri
         working-directory: apps/desktop/src-tauri
         run: npm ci
-      # Clé de signature facultative (secret ANDROID_DEBUG_KEYSTORE, fichier
-      # debug.keystore en base64) : avec la même clé d'une version à l'autre,
-      # le téléphone accepte la mise à jour sans désinstaller l'appli.
-      # Sans ce secret, Gradle crée une clé neuve à chaque construction.
-      - name: Clé de signature (si configurée)
-        env:
-          KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
-        run: |
-          if [ -n "$KEYSTORE" ]; then
-            mkdir -p ~/.android
-            printf '%s' "$KEYSTORE" | base64 -d > ~/.android/debug.keystore
-            echo "Clé de signature commune utilisée."
-          else
-            echo "Pas de secret ANDROID_DEBUG_KEYSTORE : clé de développement neuve."
-          fi
       - name: Générer le projet Android
         working-directory: apps/desktop/src-tauri
         run: NDK_HOME="$ANDROID_NDK_LATEST_HOME" npm run tauri -- android init --ci
-      - name: Construire l'APK
+      # Version « release » : code Rust optimisé et sans symboles de débogage
+      # (quelques dizaines de Mo au lieu de plusieurs centaines pour --debug).
+      # Gradle la produit non signée ; elle est signée à l'étape suivante.
+      - name: Construire l'APK (release)
         working-directory: apps/desktop/src-tauri
-        run: NDK_HOME="$ANDROID_NDK_LATEST_HOME" npm run tauri -- android build --debug --apk --target aarch64 --ci
+        run: NDK_HOME="$ANDROID_NDK_LATEST_HOME" npm run tauri -- android build --apk --target aarch64 --ci
+      # Clé de signature : secrets ANDROID_KEYSTORE (fichier .jks en base64,
+      # alias « eve-et-lucas ») et ANDROID_KEYSTORE_PASSWORD. La même clé à
+      # chaque version permet au téléphone d'installer la mise à jour sans
+      # désinstaller l'appli. Sans ces secrets, une PR signe avec une clé
+      # jetable (pour vérifier la construction) et une publication échoue.
+      - name: Signer l'APK
+        working-directory: apps/desktop/src-tauri
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          build_tools="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n 1)"
+          ks="$RUNNER_TEMP/signature.jks"
+          trap 'rm -f "$ks"' EXIT
+          if [ -n "$KEYSTORE" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
+            printf '%s' "$KEYSTORE" | base64 -d > "$ks"
+            echo "Clé de signature du dépôt utilisée."
+          elif [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            KEYSTORE_PASSWORD=$(openssl rand -hex 16)
+            keytool -genkeypair -keystore "$ks" -storetype PKCS12 \
+              -storepass "$KEYSTORE_PASSWORD" -alias eve-et-lucas \
+              -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Essai" > /dev/null
+            echo "::warning::Pas de secret ANDROID_KEYSTORE : APK signé avec une clé jetable (PR seulement)."
+          else
+            echo "::error::Secrets ANDROID_KEYSTORE et ANDROID_KEYSTORE_PASSWORD manquants : impossible de publier un APK qui se mette à jour."
+            exit 1
+          fi
+          export KEYSTORE_PASSWORD
+          unsigned=$(find gen/android/app/build/outputs/apk -name '*release*.apk' | head -n 1)
+          if [ -z "$unsigned" ]; then
+            echo "::error::APK release introuvable."
+            exit 1
+          fi
+          # Gradle aligne déjà l'APK (pages de 16 Ko pour Android 15) ;
+          # sinon on l'aligne avant de signer.
+          if "$build_tools/zipalign" -c -P 16 4 "$unsigned" > /dev/null; then
+            cp "$unsigned" "$RUNNER_TEMP/aligne.apk"
+          else
+            "$build_tools/zipalign" -P 16 -f 4 "$unsigned" "$RUNNER_TEMP/aligne.apk"
+          fi
+          mkdir -p "$RUNNER_TEMP/apk"
+          "$build_tools/apksigner" sign --ks "$ks" --ks-pass env:KEYSTORE_PASSWORD \
+            --ks-key-alias eve-et-lucas --out "$RUNNER_TEMP/apk/eve-et-lucas.apk" "$RUNNER_TEMP/aligne.apk"
+          "$build_tools/apksigner" verify --print-certs "$RUNNER_TEMP/apk/eve-et-lucas.apk"
+          ls -lh "$RUNNER_TEMP/apk"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: android
-          path: apps/desktop/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          path: ${{ runner.temp }}/apk/eve-et-lucas.apk
           if-no-files-found: error
           retention-days: 7
 
