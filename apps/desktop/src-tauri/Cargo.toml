@@ -22,6 +22,7 @@ tokio = { version = "1", features = ["sync", "time", "rt-multi-thread"] }
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2.12", features = ["tray-icon"] }
+tauri-plugin-notification = "2.8"
 # Pont pour le serveur MCP Tauri (Claude Code voit et pilote l'appli).
 # Seulement avec `--features mcp-bridge`, jamais dans une version distribuée.
 tauri-plugin-mcp-bridge = { version = "=0.13.2", optional = true }
@@ -34,6 +35,8 @@ tauri-plugin-single-instance = "2.3"
 # Seulement sur téléphone : scanner le QR code d'appairage.
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 tauri-plugin-barcode-scanner = "2.5"
+# Date des rappels programmés auprès d'Android.
+time = "0.3"
 
 [features]
 mcp-bridge = ["dep:tauri-plugin-mcp-bridge"]

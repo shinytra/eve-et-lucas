@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Tests de bout en bout de l'appli PC, pilotée par le serveur MCP Tauri.",
   "scripts": {
-    "test": "node notes.mjs capture-e2e.png"
+    "test": "node notes.mjs capture-e2e.png && node tasks.mjs capture-taches.png"
   },
   "dependencies": {
     "@hypothesi/tauri-mcp-server": "0.13.2",

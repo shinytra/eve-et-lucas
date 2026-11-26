@@ -7,10 +7,12 @@
 pub mod devices;
 pub mod notes;
 pub mod sync;
+pub mod tasks;
 
 pub use devices::{Device, DevicesDoc};
 pub use notes::{Note, NotesDoc};
 pub use sync::{SyncState, Syncable};
+pub use tasks::{Task, TasksDoc};
 
 /// Erreurs du cœur.
 #[derive(Debug, thiserror::Error)]
@@ -19,7 +21,13 @@ pub enum Error {
     NoteNotFound(String),
     #[error("une note doit avoir un titre ou un contenu")]
     EmptyNote,
-    #[error("une note doit avoir un auteur")]
+    #[error("la tâche {0} n'existe pas")]
+    TaskNotFound(String),
+    #[error("une tâche doit avoir un titre")]
+    EmptyTask,
+    #[error("le titre d'une tâche ne doit pas dépasser {0} caractères")]
+    TaskTooLong(usize),
+    #[error("il manque le prénom")]
     MissingAuthor,
     #[error("appareil invalide : {0}")]
     InvalidDevice(String),
