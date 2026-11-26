@@ -1,12 +1,12 @@
 //! Faux téléphone pour tester l'appli PC à la main ou par script :
-//! rejoint l'appareil qui affiche le code, ajoute une note, synchronise, puis
-//! affiche les notes reçues.
+//! rejoint l'appareil qui affiche le code, ajoute une note et une arrivée à la
+//! maison (« Eve »), synchronise, puis affiche les notes reçues.
 //!
 //! Usage : `cargo run -p couple-sync --example peer -- "EL1:…" "Titre de la note"`
 
 use std::sync::{Arc, Mutex};
 
-use couple_core::{DevicesDoc, NotesDoc, SyncState, Syncable};
+use couple_core::{ArrivalsDoc, DevicesDoc, NotesDoc, SyncState, Syncable};
 use couple_sync::{iroh::SecretKey, Network, Store, SyncNode};
 use iroh::EndpointId;
 
@@ -14,6 +14,7 @@ struct Phone {
     id: EndpointId,
     notes: Mutex<NotesDoc>,
     devices: Mutex<DevicesDoc>,
+    arrivals: Mutex<ArrivalsDoc>,
 }
 
 impl Phone {
@@ -21,6 +22,7 @@ impl Phone {
         match doc {
             "notes" => Ok(f(&mut *self.notes.lock().unwrap())),
             "devices" => Ok(f(&mut *self.devices.lock().unwrap())),
+            "arrivals" => Ok(f(&mut *self.arrivals.lock().unwrap())),
             _ => Err(format!("document inconnu {doc}")),
         }
     }
@@ -28,7 +30,7 @@ impl Phone {
 
 impl Store for Phone {
     fn doc_names(&self) -> Vec<String> {
-        vec!["devices".into(), "notes".into()]
+        vec!["devices".into(), "notes".into(), "arrivals".into()]
     }
     fn generate(&self, doc: &str, state: &mut SyncState) -> Result<Option<Vec<u8>>, String> {
         self.with(doc, |d| d.generate_sync_message(state))
@@ -75,6 +77,7 @@ async fn main() {
         id: secret.public(),
         notes: Mutex::new(NotesDoc::new()),
         devices: Mutex::new(DevicesDoc::new()),
+        arrivals: Mutex::new(ArrivalsDoc::new()),
     });
     phone
         .devices
@@ -87,6 +90,17 @@ async fn main() {
         .lock()
         .unwrap()
         .add("Eve", &title, "envoyée par le pair de test", 0)
+        .unwrap();
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    phone
+        .arrivals
+        .lock()
+        .unwrap()
+        .add("Eve", &phone.id.to_string(), now)
         .unwrap();
 
     let node = SyncNode::spawn(secret, phone.clone(), Network::Local)

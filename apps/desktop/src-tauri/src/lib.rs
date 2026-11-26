@@ -14,6 +14,7 @@ use std::{
 use couple_core::Note;
 use tauri::{Manager, State};
 
+mod arrivals;
 #[cfg(desktop)]
 mod desktop;
 mod files;
@@ -120,7 +121,9 @@ pub fn run() {
 
     #[cfg(mobile)]
     {
-        builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+        builder = builder
+            .plugin(tauri_plugin_barcode_scanner::init())
+            .plugin(tauri_plugin_geofence::init());
     }
 
     // Uniquement avec `--features mcp-bridge` (jamais dans une version
@@ -150,7 +153,8 @@ pub fn run() {
             let state = Arc::new(AppState::load(&data_dir, &default_device_name())?);
             app.manage(state.clone());
             sync::start(app.handle(), state.clone());
-            reminders::start(app.handle(), state);
+            reminders::start(app.handle(), state.clone());
+            arrivals::start(app.handle(), state);
             #[cfg(desktop)]
             desktop::setup(app)?;
             Ok(())
@@ -166,6 +170,9 @@ pub fn run() {
             tasks::update_task,
             tasks::set_task_done,
             tasks::delete_task,
+            arrivals::list_arrivals,
+            arrivals::arrival_person,
+            arrivals::set_arrival_person,
             files::list_files,
             files::upload_start,
             files::upload_chunk,
