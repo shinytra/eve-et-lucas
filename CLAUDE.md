@@ -11,6 +11,7 @@ Appli de couple pour Eve et Lucas, en Rust, pour Android et PC. Lucas valide cha
   - Identité d'un appareil = sa clé iroh (`device.key` dans le dossier de données). La liste des appareils autorisés est elle-même un document Automerge synchronisé (`DevicesDoc`) : un appareil appairé avec le PC est appris par les autres.
   - Appairage (ALPN `eve-et-lucas/pair/1`) : code `EL1:…` (QR code) à usage unique, valable 10 min, contenant l'adresse de l'hôte et un secret. Synchro (ALPN `eve-et-lucas/sync/1`) : refusée à tout appareil absent de `DevicesDoc`, un flux par document, protocole de synchro d'Automerge.
   - L'appli fournit le stockage via le trait `Store`. Pour un nouveau document partagé : l'ajouter à `doc_names()` et à `generate`/`receive` dans `apps/desktop/src-tauri/src/store.rs`.
+  - Fichiers : la liste est le document `files` (`FilesDoc`, nom nettoyé : jamais de dossier), le contenu est rangé par empreinte BLAKE3 avec `iroh-blobs` (dossier `fichiers/`, ménage toutes les 10 min des contenus sans étiquette `fichier-<empreinte>`). Seuls les appareils de `DevicesDoc` peuvent en demander, personne ne peut en pousser. Après chaque synchro, `Store::wanted_blobs` dit quoi télécharger : tout sur PC, les images de 10 Mo au plus sur téléphone, le reste à la demande. Transfert interface ↔ Rust en binaire brut (`InvokeBody::Raw`, en-têtes `x-name`…), aperçus en `blob:` (autorisé dans `img-src`).
   - Réseau `Online` (relais et annuaire DNS publics de n0, chiffré de bout en bout, rien n'est stocké) dans l'appli ; `Local` (connexions directes) dans les tests.
 - **Kotlin (à venir)** : uniquement ce que Rust ne peut pas faire sur Android (géofencing en arrière-plan, widgets Glance, service au premier plan), sous forme de plugins Tauri maison dans `plugins/`. Jamais de code à la main dans `gen/android` (régénéré).
 
@@ -23,7 +24,7 @@ cargo test --workspace                  # tests du cœur
 cargo run -p eve-et-lucas-desktop       # lance l'appli PC
 cargo run -p eve-et-lucas-desktop --features mcp-bridge   # idem, pilotable par le serveur MCP Tauri
 cargo tauri dev --features mcp-bridge   # idem, avec la CLI Tauri (cargo install tauri-cli --version "^2")
-cd apps/desktop/e2e && npm install && npm test   # notes + tâches de bout en bout via le MCP Tauri (appli lancée avec --features mcp-bridge)
+cd apps/desktop/e2e && npm install && npm test   # notes + tâches + fichiers de bout en bout via le MCP Tauri (appli lancée avec --features mcp-bridge)
 cargo build -p couple-sync --example peer && (cd apps/desktop/e2e && node pairing.mjs)   # appairage + synchro avec un faux téléphone
 EVE_ET_LUCAS_DATA_DIR=/tmp/essai cargo run -p eve-et-lucas-desktop   # appli avec un autre dossier de données
 cd apps/desktop/src-tauri && npm ci && npm run tauri -- android init   # (ou cargo tauri android init) génère gen/android (non versionné), besoin du SDK + NDK (NDK_HOME)
@@ -77,6 +78,6 @@ Plutôt que de réécrire, s'inspirer de (ou dépendre de) :
    b. ✅ Synchro iroh entre appareils + appairage par QR code (écran « Appareils »).
 3. ✅ Appli Android avec la même base (APK construit par la CI, scan du QR code d'appairage ; reste à essayer sur vos téléphones).
 4. ✅ Tâches communes et rappels (notifications).
-5. Partage de fichiers P2P (iroh-blobs).
+5. ✅ Partage de fichiers P2P (iroh-blobs).
 6. Sonnerie à l'arrivée (géofencing, plugin Kotlin).
 7. Widgets interactifs partagés (Glance, plugin Kotlin), réveil par ntfy.

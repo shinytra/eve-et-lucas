@@ -28,6 +28,19 @@ pub struct SyncHandle {
 }
 
 impl SyncHandle {
+    /// Le nœud, s'il a démarré.
+    pub fn node(&self) -> Result<&SyncNode<AppState>, String> {
+        self.node.get().ok_or_else(|| {
+            self.start_error
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
+                .unwrap_or_else(|| {
+                    "La synchro démarre encore, réessaie dans un instant.".to_owned()
+                })
+        })
+    }
+
     fn set_status(&self, app: &AppHandle, status: SyncStatus) {
         *self.last_status.lock().unwrap_or_else(|e| e.into_inner()) = Some(status.clone());
         let _ = app.emit("sync-status", status);
@@ -40,8 +53,15 @@ pub fn start(app: &AppHandle, state: Arc<AppState>) {
     let _ = state.app.set(app.clone());
     let app = app.clone();
     async_runtime::spawn(async move {
-        let node = match SyncNode::spawn(state.secret.clone(), state.clone(), Network::Online).await
-        {
+        let files_dir = state.data_dir.join("fichiers");
+        let spawned = SyncNode::spawn_with_files(
+            state.secret.clone(),
+            state.clone(),
+            Network::Online,
+            &files_dir,
+        )
+        .await;
+        let node = match spawned {
             Ok(node) => node,
             Err(e) => {
                 let message = format!("La synchro n'a pas pu démarrer : {e}");

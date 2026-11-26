@@ -16,6 +16,7 @@ use tauri::{Manager, State};
 
 #[cfg(desktop)]
 mod desktop;
+mod files;
 mod reminders;
 mod store;
 mod sync;
@@ -164,6 +165,12 @@ pub fn run() {
             tasks::update_task,
             tasks::set_task_done,
             tasks::delete_task,
+            files::list_files,
+            files::share_file,
+            files::delete_file,
+            files::download_file,
+            files::file_content,
+            files::save_file,
             sync::list_devices,
             sync::this_device,
             sync::rename_this_device,
