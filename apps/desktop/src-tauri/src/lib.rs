@@ -103,6 +103,11 @@ pub fn run() {
         builder = desktop::plugins(builder).on_window_event(desktop::on_window_event);
     }
 
+    #[cfg(mobile)]
+    {
+        builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+    }
+
     // Uniquement avec `--features mcp-bridge` (jamais dans une version
     // distribuée) : laisse Claude Code, via le serveur MCP Tauri, faire des
     // captures, cliquer et lire les logs. Ce pont n'a pas d'authentification.

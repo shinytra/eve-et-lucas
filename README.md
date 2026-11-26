@@ -22,6 +22,16 @@ cargo run -p eve-et-lucas-desktop
 
 Les notes sont enregistrées dans le dossier de données de l'appli (`%APPDATA%\fr.eveetlucas.couple` sous Windows, `~/.local/share/fr.eveetlucas.couple` sous Linux).
 
+## Installer l'appli sur Android
+
+Chaque modification de `main` fabrique un APK de test sur GitHub :
+
+1. Onglet **Actions** du dépôt, workflow **Android**, dernière exécution réussie.
+2. En bas de la page, télécharger **eve-et-lucas-android-debug** (fichier zip contenant l'APK).
+3. Sur le téléphone, ouvrir l'APK et autoriser l'installation depuis cette source.
+
+L'APK est une version de test (signée avec une clé de développement, pour téléphones ARM 64 bits, soit presque tous les téléphones récents). Pour appairer le téléphone, ouvrir « Appareils » sur le PC, puis « Scanner le QR code » sur le téléphone.
+
 ## Développer avec Claude Code
 
 Ouvre le dossier dans Claude Code : il propose d'installer les plugins et serveurs MCP déclarés dans `.claude/settings.json` et `.mcp.json` (accepte-les). Le détail de cet outillage est dans [CLAUDE.md](CLAUDE.md). Les serveurs MCP ont besoin de Node.js 20 ou plus.
