@@ -52,11 +52,8 @@
     }
   }
 
-  function button(label, onClick, className) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.textContent = label;
-    if (className) b.className = className;
+  function button(icon, label, onClick, className) {
+    const b = window.__ui.iconButton(icon, label, className);
     b.addEventListener("click", async () => {
       b.disabled = true;
       showError(null);
@@ -92,14 +89,14 @@
         actions.className = "actions";
         if (file.available && !isPhone) {
           actions.append(
-            button("Enregistrer", async () => {
+            button("enregistrer", `Enregistrer « ${file.name} »`, async () => {
               const path = await invoke("save_file", { id: file.id });
               showStatus(`Enregistré : ${path}`);
             }),
           );
         } else if (!file.available) {
           actions.append(
-            button("Télécharger", async () => {
+            button("telecharger", `Télécharger « ${file.name} »`, async () => {
               showStatus(`Téléchargement de « ${file.name} »…`);
               try {
                 await invoke("download_file", { id: file.id });
@@ -114,9 +111,16 @@
         }
         actions.append(
           button(
-            "Supprimer",
+            "supprimer",
+            `Supprimer « ${file.name} »`,
             async () => {
-              await invoke("delete_file", { id: file.id });
+              await window.__ui.sortie(li);
+              try {
+                await invoke("delete_file", { id: file.id });
+              } catch (e) {
+                li.classList.remove("sortie");
+                throw e;
+              }
               await refresh();
             },
             "danger",

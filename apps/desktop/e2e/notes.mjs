@@ -18,10 +18,14 @@ function check(label, cond) { console.log(`${cond ? "✓" : "✗"} ${label}`); i
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 console.log(await call("driver_session", { action: "start", host: "127.0.0.1", port: 9223 }));
+// Un écran à la fois : on va sur celui des notes.
+await js("(() => { location.hash = '#notes'; return true })()");
+await sleep(500);
 await js("(() => { localStorage.clear(); return true })()");
 const count = async () => Number((await js("(() => document.querySelectorAll('#notes li').length)()")).match(/\d+/)?.[0] ?? -1);
 const n0 = await count();
 
+await js("(() => { const f = document.getElementById('note-form'); if (!f.classList.contains('ouvert')) document.querySelector('.ajouter[data-form=note-form]').click(); return true })()");
 await call("webview_keyboard", { action: "type", selector: "#title", text: "Test MCP" });
 await call("webview_keyboard", { action: "type", selector: "#body", text: "ajoutée par le serveur MCP Tauri" });
 await call("webview_interact", { action: "click", selector: "#save" });
@@ -38,6 +42,9 @@ await call("webview_keyboard", { action: "type", selector: "#body", text: "modif
 await call("webview_interact", { action: "click", selector: "#save" });
 await sleep(800);
 check("modification enregistrée", (await js("(() => document.querySelector('#notes li .body')?.textContent)()")).includes("modifiée"));
+check("le formulaire se replie après l'enregistrement", (await js("(() => document.getElementById('note-form').classList.contains('ouvert'))()")).includes("false"));
+
+await js("(() => { const f = document.getElementById('note-form'); if (!f.classList.contains('ouvert')) document.querySelector('.ajouter[data-form=note-form]').click(); return true })()");
 
 await call("webview_interact", { action: "click", selector: "#save" });
 await sleep(500);

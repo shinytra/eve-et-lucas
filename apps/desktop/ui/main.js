@@ -48,7 +48,7 @@ function resetForm() {
   editingId = null;
   form.reset();
   saveButton.textContent = "Ajouter";
-  cancelButton.hidden = true;
+  window.__ui?.fermer(form);
 }
 
 function startEdit(note) {
@@ -56,7 +56,7 @@ function startEdit(note) {
   titleInput.value = note.title;
   bodyInput.value = note.body;
   saveButton.textContent = "Enregistrer";
-  cancelButton.hidden = false;
+  window.__ui?.ouvrir(form);
   titleInput.focus();
 }
 
@@ -77,19 +77,18 @@ function render(notes) {
       meta.className = "meta";
       meta.textContent = `${note.author || "?"} · ${formatDate(note.updated_at)}`;
 
-      const edit = document.createElement("button");
-      edit.textContent = "Modifier";
+      const edit = window.__ui.iconButton("modifier", `Modifier « ${note.title || "Sans titre"} »`);
       edit.addEventListener("click", () => startEdit(note));
 
-      const del = document.createElement("button");
-      del.textContent = "Supprimer";
-      del.className = "danger";
+      const del = window.__ui.iconButton("supprimer", `Supprimer « ${note.title || "Sans titre"} »`, "danger");
       del.addEventListener("click", async () => {
         del.disabled = true;
+        await window.__ui.sortie(li);
         try {
           await invoke("delete_note", { id: note.id });
         } catch (e) {
           del.disabled = false;
+          li.classList.remove("sortie");
           showError(String(e));
           return;
         }
@@ -101,7 +100,11 @@ function render(notes) {
       actions.className = "actions";
       actions.append(edit, del);
 
-      li.append(h3, ...(note.body ? [body] : []), meta, actions);
+      const tete = document.createElement("div");
+      tete.className = "note-tete";
+      tete.append(h3, actions);
+
+      li.append(tete, ...(note.body ? [body] : []), meta);
       return li;
     }),
   );

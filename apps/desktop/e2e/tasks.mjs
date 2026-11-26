@@ -19,10 +19,14 @@ function check(label, cond) { console.log(`${cond ? "✓" : "✗"} ${label}`); i
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 console.log(await call("driver_session", { action: "start", host: "127.0.0.1", port: 9223 }));
+// Un écran à la fois : on va sur celui des taches.
+await js("(() => { location.hash = '#taches'; return true })()");
+await sleep(500);
 const count = async () => Number((await js("(() => document.querySelectorAll('#tasks li').length)()")).match(/\d+/)?.[0] ?? -1);
 const first = (expr) => js(`(() => { const li = document.querySelector('#tasks li'); return ${expr} })()`);
 const n0 = await count();
 
+await js("(() => { const f = document.getElementById('task-form'); if (!f.classList.contains('ouvert')) document.querySelector('.ajouter[data-form=task-form]').click(); return true })()");
 // Tâche avec un rappel déjà passé : elle doit apparaître « en retard » et déclencher la notification.
 await call("webview_keyboard", { action: "type", selector: "#task-title", text: "Tâche MCP" });
 await js(`(() => {
@@ -45,6 +49,7 @@ await sleep(800);
 const doneMeta = await js("(() => [...document.querySelectorAll('#tasks li')].find(li => li.textContent.includes('Tâche MCP'))?.querySelector('.meta').textContent)()");
 check("tâche cochée : « Faite par Lucas »", /Faite par Lucas/.test(doneMeta));
 
+await js("(() => { const f = document.getElementById('task-form'); if (!f.classList.contains('ouvert')) document.querySelector('.ajouter[data-form=task-form]').click(); return true })()");
 await call("webview_interact", { action: "click", selector: "#task-save" });
 await sleep(500);
 const err = await js("(() => { const e = document.getElementById('task-error'); return e.hidden ? '' : e.textContent })()");
