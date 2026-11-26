@@ -14,6 +14,7 @@ use std::{
 use couple_core::Note;
 use tauri::{Manager, State};
 
+mod appearance;
 mod arrivals;
 #[cfg(desktop)]
 mod desktop;
@@ -155,6 +156,7 @@ pub fn run() {
             };
             let state = Arc::new(AppState::load(&data_dir, &default_device_name())?);
             app.manage(state.clone());
+            app.manage(appearance::AppearanceState::load(&data_dir));
             sync::start(app.handle(), state.clone());
             reminders::start(app.handle(), state.clone());
             arrivals::start(app.handle(), state.clone());
@@ -196,6 +198,16 @@ pub fn run() {
             sync::join_pairing,
             sync::sync_now,
             sync::sync_status,
+            appearance::get_appearance,
+            appearance::set_appearance,
+            appearance::apply_preset,
+            appearance::save_theme,
+            appearance::apply_saved_theme,
+            appearance::delete_theme,
+            appearance::export_theme,
+            appearance::import_theme,
+            appearance::get_wallpaper,
+            appearance::set_wallpaper,
         ])
         .run(tauri::generate_context!());
 

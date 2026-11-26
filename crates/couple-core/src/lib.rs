@@ -4,6 +4,7 @@
 //! données du couple et leurs règles. Il sera utilisé tel quel par l'appli PC,
 //! l'appli Android et, plus tard, par la synchro iroh.
 
+pub mod appearance;
 pub mod arrivals;
 pub mod devices;
 pub mod files;
@@ -13,6 +14,7 @@ pub mod sync;
 pub mod tasks;
 pub mod widget;
 
+pub use appearance::{Appearance, AppearanceSettings};
 pub use arrivals::{Arrival, ArrivalsDoc};
 pub use devices::{Device, DevicesDoc};
 pub use files::{FilesDoc, SharedFile};
@@ -51,6 +53,18 @@ pub enum Error {
     InvalidDevice(String),
     #[error("message de synchro illisible : {0}")]
     SyncMessage(String),
+    #[error("code de thème invalide : {0}")]
+    InvalidTheme(String),
+    #[error("le préréglage {0} n'existe pas")]
+    PresetNotFound(String),
+    #[error("le thème {0} n'existe pas")]
+    ThemeNotFound(String),
+    #[error("un thème doit avoir un nom")]
+    EmptyThemeName,
+    #[error("{0} thèmes personnels au maximum : supprimes-en un d'abord")]
+    TooManyThemes(usize),
+    #[error("image de fond refusée : {0}")]
+    InvalidWallpaper(String),
     // Les erreurs des bibliothèques sont « boxées » pour garder `Error` petit.
     #[error("document Automerge invalide : {0}")]
     Automerge(Box<automerge::AutomergeError>),
