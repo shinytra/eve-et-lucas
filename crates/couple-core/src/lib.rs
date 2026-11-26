@@ -4,9 +4,13 @@
 //! données du couple et leurs règles. Il sera utilisé tel quel par l'appli PC,
 //! l'appli Android et, plus tard, par la synchro iroh.
 
+pub mod devices;
 pub mod notes;
+pub mod sync;
 
+pub use devices::{Device, DevicesDoc};
 pub use notes::{Note, NotesDoc};
+pub use sync::{SyncState, Syncable};
 
 /// Erreurs du cœur.
 #[derive(Debug, thiserror::Error)]
@@ -17,6 +21,10 @@ pub enum Error {
     EmptyNote,
     #[error("une note doit avoir un auteur")]
     MissingAuthor,
+    #[error("appareil invalide : {0}")]
+    InvalidDevice(String),
+    #[error("message de synchro illisible : {0}")]
+    SyncMessage(String),
     // Les erreurs des bibliothèques sont « boxées » pour garder `Error` petit.
     #[error("document Automerge invalide : {0}")]
     Automerge(Box<automerge::AutomergeError>),

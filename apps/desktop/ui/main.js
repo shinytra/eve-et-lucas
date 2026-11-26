@@ -152,3 +152,8 @@ cancelButton.addEventListener("click", resetForm);
   }
   await refresh();
 })();
+
+// Une synchro a apporté des changements d'un autre appareil.
+window.__TAURI__.event?.listen("docs-changed", (event) => {
+  if (event.payload?.includes("notes")) refresh();
+});

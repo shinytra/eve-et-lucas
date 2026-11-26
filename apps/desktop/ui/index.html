@@ -34,8 +34,46 @@
         <p id="empty" hidden>Aucune note pour l'instant.</p>
         <ul id="notes"></ul>
       </section>
+
+      <section aria-labelledby="devices-title" class="devices">
+        <h2 id="devices-title">Appareils</h2>
+        <p id="sync-status" class="meta">Synchro en cours de démarrage…</p>
+        <ul id="devices"></ul>
+        <div class="actions">
+          <button type="button" id="sync-now">Synchroniser maintenant</button>
+          <button type="button" id="pair-start">Appairer un appareil</button>
+        </div>
+
+        <div id="pairing" hidden>
+          <p>Sur l'autre appareil, choisis « Rejoindre » puis scanne ce QR code ou colle le code. Il est valable 10 minutes et ne sert qu'une fois.</p>
+          <div id="pair-qr" class="qr"></div>
+          <textarea id="pair-code" rows="3" readonly aria-label="Code d'appairage"></textarea>
+          <div class="actions">
+            <button type="button" id="pair-copy">Copier le code</button>
+            <button type="button" id="pair-cancel">Fermer</button>
+          </div>
+        </div>
+
+        <form id="join-form" autocomplete="off">
+          <label for="join-code">Rejoindre avec un code</label>
+          <textarea id="join-code" rows="2" placeholder="EL1:…"></textarea>
+          <div class="actions">
+            <button type="submit" id="join-submit">Rejoindre</button>
+          </div>
+        </form>
+
+        <form id="rename-form" autocomplete="off">
+          <label for="device-name">Nom de cet appareil</label>
+          <input id="device-name" maxlength="60" />
+          <div class="actions">
+            <button type="submit">Renommer</button>
+          </div>
+        </form>
+        <p id="devices-error" role="alert" hidden></p>
+      </section>
     </main>
 
     <script src="main.js"></script>
+    <script src="devices.js"></script>
   </body>
 </html>
