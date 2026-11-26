@@ -48,7 +48,9 @@
   function themeVars(a) {
     const op = a.glass_opacity / 100;
     const dark = luminance(a.text) > 0.5;
-    const accentText = luminance(a.accent) > 0.45 ? "#14161f" : "#ffffff";
+    // Les boutons sont un dégradé accent → accent 2 : texte foncé si l'une
+    // des deux couleurs est claire.
+    const accentText = Math.max(luminance(a.accent), luminance(a.accent2)) > 0.45 ? "#14161f" : "#ffffff";
     const shadowAlpha = (a.shadow / 100) * (dark ? 0.55 : 0.3);
     return {
       "--accent": a.accent,
@@ -530,7 +532,8 @@
   // Avant une action qui lit le thème côté cœur, on enregistre d'abord les
   // derniers réglages encore en attente.
   async function flush() {
-    if (saveTimer === null) return;
+    // Rien en attente : on attend quand même les écritures déjà parties.
+    if (saveTimer === null) return writes;
     clearTimeout(saveTimer);
     saveTimer = null;
     await write("set_appearance", { appearance: current });
@@ -565,7 +568,7 @@
   async function showExportCode() {
     try {
       await flush();
-      $("export-code").value = await invoke("export_theme");
+      $("export-code").value = await write("export_theme");
     } catch (e) {
       status(String(e), true);
     }

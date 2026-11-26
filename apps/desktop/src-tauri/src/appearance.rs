@@ -26,7 +26,8 @@ pub struct AppearanceState {
     settings: Mutex<AppearanceSettings>,
     path: PathBuf,
     wallpaper_path: PathBuf,
-    startup_warning: Option<String>,
+    /// Avertissement du démarrage, montré une seule fois.
+    startup_warning: Mutex<Option<String>>,
 }
 
 /// Tout ce dont l'écran de réglages a besoin, en un seul appel.
@@ -81,7 +82,7 @@ impl AppearanceState {
             settings: Mutex::new(settings),
             path,
             wallpaper_path: data_dir.join(WALLPAPER_FILE),
-            startup_warning,
+            startup_warning: Mutex::new(startup_warning),
         }
     }
 
@@ -118,7 +119,11 @@ impl AppearanceState {
             saved: settings.saved.clone(),
             presets: appearance::presets(),
             limits: LIMITS,
-            warning: self.startup_warning.clone(),
+            warning: self
+                .startup_warning
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .take(),
         }
     }
 }
@@ -186,9 +191,13 @@ pub fn import_theme(state: State<'_, AppearanceState>, code: String) -> Result<A
 }
 
 /// Image de fond enregistrée, s'il y en a une (illisible : ignorée).
+/// Commande asynchrone : lire plusieurs Mo ne doit pas figer l'interface.
 #[tauri::command]
-pub fn get_wallpaper(state: State<'_, AppearanceState>) -> Option<String> {
-    let path = &state.wallpaper_path;
+pub async fn get_wallpaper(state: State<'_, AppearanceState>) -> Result<Option<String>, String> {
+    Ok(read_wallpaper(&state.wallpaper_path))
+}
+
+fn read_wallpaper(path: &Path) -> Option<String> {
     let error = match fs::read_to_string(path) {
         Ok(data) => match appearance::validate_wallpaper(&data) {
             Ok(()) => return Some(data),
@@ -209,9 +218,10 @@ pub fn get_wallpaper(state: State<'_, AppearanceState>) -> Option<String> {
     None
 }
 
-/// Enregistre l'image de fond (`None` la supprime).
+/// Enregistre l'image de fond (`None` la supprime). Asynchrone, comme
+/// `get_wallpaper`.
 #[tauri::command]
-pub fn set_wallpaper(
+pub async fn set_wallpaper(
     state: State<'_, AppearanceState>,
     data_url: Option<String>,
 ) -> Result<(), String> {
@@ -255,7 +265,7 @@ mod tests {
         state.change("", |s| s.save_current_as("Le mien")).unwrap();
 
         let reloaded = AppearanceState::load(&dir);
-        assert!(reloaded.startup_warning.is_none());
+        assert!(reloaded.view().warning.is_none());
         assert_eq!(reloaded.lock().current.preset, "neon");
         assert_eq!(reloaded.lock().saved.len(), 1);
         fs::remove_dir_all(dir).unwrap();
@@ -268,7 +278,9 @@ mod tests {
         fs::write(dir.join(APPEARANCE_FILE), b"{ pas du json").unwrap();
 
         let state = AppearanceState::load(&dir);
-        assert!(state.startup_warning.is_some());
+        assert!(state.view().warning.is_some());
+        // Montré une seule fois, pas à chaque rechargement de l'interface.
+        assert!(state.view().warning.is_none());
         assert_eq!(state.lock().current, Appearance::default());
         let backups = fs::read_dir(&dir)
             .unwrap()
@@ -290,7 +302,7 @@ mod tests {
         let dir = temp_dir("unreadable");
         fs::create_dir_all(dir.join(APPEARANCE_FILE)).unwrap();
         let state = AppearanceState::load(&dir);
-        assert!(state.startup_warning.is_some());
+        assert!(state.view().warning.is_some());
         assert_eq!(state.lock().current, Appearance::default());
         fs::remove_dir_all(dir).unwrap();
     }
