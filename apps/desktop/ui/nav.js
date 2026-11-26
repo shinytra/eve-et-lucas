@@ -15,8 +15,9 @@
   };
 
   const ecrans = [...document.querySelectorAll("main > section[data-ecran]")];
-  const ordre = ecrans.map((s) => s.dataset.ecran);
   const liens = [...document.querySelectorAll("#nav a[data-ecran]")];
+  // L'ordre du menu donne le sens de la transition entre deux écrans.
+  const ordre = liens.map((l) => l.dataset.ecran).filter((nom) => ecrans.some((s) => s.dataset.ecran === nom));
   const indicateur = document.querySelector(".nav-indicateur");
   const titre = $("titre-ecran");
   const plus = $("plus");

@@ -31,7 +31,7 @@ await sleep(1500);
 check("l'appli s'ouvre sur l'accueil", (await visibles()) === "accueil");
 check("le menu latéral est affiché sur PC", (await js("(() => getComputedStyle(document.querySelector('.nav .marque')).display)()")) !== "none");
 
-for (const ecran of ["taches", "dates", "notes", "fichiers", "maison", "appareils"]) {
+for (const ecran of ["taches", "dates", "notes", "animes", "fichiers", "maison", "appareils"]) {
   await call("webview_interact", { action: "click", selector: `#nav a[data-ecran="${ecran}"]` });
   await sleep(500);
   check(`le menu ouvre l'écran « ${ecran} » (et lui seul)`, (await visibles()) === ecran);

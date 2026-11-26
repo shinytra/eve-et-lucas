@@ -4,6 +4,8 @@
 //! données du couple et leurs règles. Il sera utilisé tel quel par l'appli PC,
 //! l'appli Android et, plus tard, par la synchro iroh.
 
+pub mod anilist;
+pub mod animes;
 pub mod appearance;
 pub mod arrivals;
 pub mod dates;
@@ -15,6 +17,7 @@ pub mod sync;
 pub mod tasks;
 pub mod widget;
 
+pub use animes::{Anime, AnimeInfo, AnimesDoc};
 pub use appearance::{Appearance, AppearanceSettings};
 pub use arrivals::{Arrival, ArrivalsDoc};
 pub use dates::{DateInput, DateReminder, DatesDoc, Day, ImportantDate, UpcomingDate};
@@ -43,6 +46,20 @@ pub enum Error {
     EmptyTask,
     #[error("le titre d'une tâche ne doit pas dépasser {0} caractères")]
     TaskTooLong(usize),
+    #[error("l'animé {0} n'existe pas")]
+    AnimeNotFound(String),
+    #[error("un animé doit avoir un titre")]
+    EmptyAnime,
+    #[error("le titre ne doit pas dépasser {0} caractères")]
+    AnimeTitleTooLong(usize),
+    #[error("« {0} » est déjà dans votre liste")]
+    AnimeAlreadyAdded(String),
+    #[error("cet animé n'a que {0} épisodes")]
+    EpisodeOutOfRange(u32),
+    #[error("statut inconnu : {0}")]
+    InvalidAnimeStatus(String),
+    #[error("recherche AniList impossible : {0}")]
+    AniList(String),
     #[error("le fichier {0} n'existe pas")]
     FileNotFound(String),
     #[error("un fichier partagé ne doit pas dépasser {0} Mo")]

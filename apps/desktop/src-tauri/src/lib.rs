@@ -3,8 +3,9 @@
 //! Ce crate ne contient que de la « plomberie » : il expose les fonctions du
 //! cœur (`couple-core`) à l'interface web via des commandes Tauri, enregistre
 //! les documents sur le disque (`store.rs`), les synchronise avec les autres
-//! appareils (`sync.rs`) et affiche les rappels des tâches (`reminders.rs`)
-//! et des dates importantes (`dates.rs`).
+//! appareils (`sync.rs`), affiche les rappels des tâches (`reminders.rs`)
+//! et des dates importantes (`dates.rs`), et garde les affiches des animés
+//! (`animes.rs`).
 //! Aucune règle métier ici.
 
 use std::{
@@ -15,6 +16,7 @@ use std::{
 use couple_core::Note;
 use tauri::{Manager, State};
 
+mod animes;
 mod appearance;
 mod arrivals;
 mod dates;
@@ -164,6 +166,7 @@ pub fn run() {
             dates::start(app.handle(), state.clone());
             arrivals::start(app.handle(), state.clone());
             widget::start(app.handle(), state.clone());
+            animes::start(app.handle(), state.clone());
             push::start(app.handle(), state);
             #[cfg(desktop)]
             desktop::setup(app)?;
@@ -180,6 +183,15 @@ pub fn run() {
             tasks::update_task,
             tasks::set_task_done,
             tasks::delete_task,
+            animes::list_animes,
+            animes::search_animes,
+            animes::add_anime,
+            animes::set_anime_episode,
+            animes::set_anime_status,
+            animes::refresh_anime,
+            animes::delete_anime,
+            animes::anime_statuses,
+            animes::anime_cover,
             dates::list_dates,
             dates::add_date,
             dates::update_date,

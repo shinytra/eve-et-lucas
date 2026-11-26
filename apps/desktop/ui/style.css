@@ -1154,6 +1154,233 @@ input[type="color"] {
   display: none;
 }
 
+/* ---------- Animés ---------- */
+
+#anime-search {
+  margin-top: 0;
+}
+
+#anime-status,
+#animes-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+#anime-error {
+  margin: 0;
+  color: var(--danger);
+}
+
+#anime-results {
+  display: grid;
+  gap: 8px;
+}
+
+#anime-results[hidden] {
+  display: none;
+}
+
+#anime-results .aide {
+  text-align: right;
+}
+
+.resultats,
+#animes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.resultats {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.resultat,
+.anime {
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--field-bg);
+}
+
+.resultat {
+  align-items: center;
+}
+
+.resultat .affiche {
+  width: 46px;
+}
+
+.resultat button {
+  flex: none;
+}
+
+.affiche {
+  --anime-color: var(--accent);
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  aspect-ratio: 2 / 3;
+  align-self: flex-start;
+  overflow: hidden;
+  border-radius: calc(var(--radius) * 0.45);
+  background: linear-gradient(160deg, var(--anime-color), color-mix(in srgb, var(--anime-color) 55%, #000));
+}
+
+.affiche img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.initiales {
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.2rem;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.texte {
+  flex: 1;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.titre {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.texte .meta,
+.genres {
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.anime .corps {
+  flex: 1;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.anime[data-status="fini"] .titre::after {
+  content: " ✓";
+  color: var(--accent);
+}
+
+.anime[data-status="abandonne"] {
+  opacity: 0.7;
+}
+
+.progression {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.barre-episodes {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  overflow: hidden;
+}
+
+.barre-episodes i {
+  --progress: 0;
+  display: block;
+  height: 100%;
+  width: calc(var(--progress) * 100%);
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+
+/* Nombre d'épisodes inconnu : la barre ne montre qu'un début. */
+.barre-episodes.inconnu i {
+  width: calc(var(--progress) * 30%);
+}
+
+.controles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.episode {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.episode input {
+  width: 64px;
+  padding: 8px;
+  text-align: center;
+}
+
+.episode button {
+  min-width: 40px;
+  padding: 8px 10px;
+}
+
+.controles select {
+  flex: 1 1 120px;
+  width: auto;
+}
+
+.anime .actions button {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+.filtres {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.filtres[hidden] {
+  display: none;
+}
+
+.filtres button {
+  flex: none;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+.filtres button[aria-pressed="true"] {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+  color: var(--accent-text);
+}
+
+@media (max-width: 420px) {
+  .affiche {
+    width: 64px;
+  }
+}
+
+/* Le champ d'épisode a déjà ses boutons − et +1. */
+.episode input::-webkit-outer-spin-button,
+.episode input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.episode input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* ---------- Navigation ---------- */
 
 .nav {
@@ -1354,7 +1581,7 @@ input[type="color"] {
 .tuiles {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
@@ -1388,6 +1615,10 @@ input[type="color"] {
 
 .tuile:nth-child(4) {
   animation-delay: 120ms;
+}
+
+.tuile:nth-child(5) {
+  animation-delay: 160ms;
 }
 
 @media (max-width: 380px) {
