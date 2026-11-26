@@ -18,10 +18,15 @@ tauri-build = { version = "2.7", features = [] }
 couple-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tauri = { version = "2.12", features = [] }
+tauri = { version = "2.12", features = ["tray-icon"] }
 # Pont pour le serveur MCP Tauri (Claude Code voit et pilote l'appli).
 # Seulement avec `--features mcp-bridge`, jamais dans une version distribuée.
 tauri-plugin-mcp-bridge = { version = "=0.13.2", optional = true }
+
+# Seulement sur PC : tâche de fond, lancement au démarrage, instance unique.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-autostart = "2.5"
+tauri-plugin-single-instance = "2.3"
 
 [features]
 mcp-bridge = ["dep:tauri-plugin-mcp-bridge"]
