@@ -7,7 +7,7 @@ use std::{
     sync::{Mutex, MutexGuard, OnceLock},
 };
 
-use couple_core::{DevicesDoc, NotesDoc, SyncState, Syncable};
+use couple_core::{DevicesDoc, NotesDoc, SyncState, Syncable, TasksDoc};
 use couple_sync::{
     iroh::{EndpointId, SecretKey},
     Store,
@@ -29,6 +29,15 @@ impl Persist for NotesDoc {
     }
     fn save(&mut self) -> Vec<u8> {
         NotesDoc::save(self)
+    }
+}
+
+impl Persist for TasksDoc {
+    fn load(bytes: &[u8]) -> couple_core::Result<Self> {
+        TasksDoc::load(bytes)
+    }
+    fn save(&mut self) -> Vec<u8> {
+        TasksDoc::save(self)
     }
 }
 
@@ -151,19 +160,29 @@ pub fn load_or_create_key(path: &Path) -> std::io::Result<SecretKey> {
 }
 
 pub const NOTES_DOC: &str = "notes";
+pub const TASKS_DOC: &str = "tasks";
 pub const DEVICES_DOC: &str = "devices";
 
 /// Tout l'état de l'appli.
 pub struct AppState {
     pub notes: Persisted<NotesDoc>,
+    pub tasks: Persisted<TasksDoc>,
     pub devices: Persisted<DevicesDoc>,
     /// Messages à montrer au démarrage (fichier illisible, etc.).
     pub startup_warnings: Vec<String>,
+    /// Problèmes survenus après le démarrage (notifications refusées…),
+    /// montrés à l'ouverture de l'interface.
+    pub notices: Mutex<Vec<String>>,
+    /// Dossier de données de l'appli (rappels programmés sur téléphone).
+    #[cfg_attr(not(mobile), allow(dead_code))]
+    pub data_dir: PathBuf,
     /// Identifiant iroh de cet appareil.
     pub self_id: EndpointId,
     pub secret: SecretKey,
     /// Réveille la boucle de synchro après une modification locale.
     pub sync_wanted: Notify,
+    /// Réveille la boucle des rappels quand les tâches ont changé.
+    pub reminders_wanted: Notify,
     /// Pour prévenir l'interface quand la synchro a changé des documents.
     pub app: OnceLock<AppHandle>,
 }
@@ -173,16 +192,21 @@ impl AppState {
         fs::create_dir_all(data_dir)?;
         let mut startup_warnings = Vec::new();
         let notes = Persisted::load(data_dir.join("notes.automerge"), &mut startup_warnings)?;
+        let tasks = Persisted::load(data_dir.join("tasks.automerge"), &mut startup_warnings)?;
         let devices = Persisted::load(data_dir.join("devices.automerge"), &mut startup_warnings)?;
         let secret = load_or_create_key(&data_dir.join("device.key"))?;
         let self_id = secret.public();
         let state = Self {
             notes,
+            tasks,
             devices,
             startup_warnings,
+            notices: Mutex::new(Vec::new()),
+            data_dir: data_dir.to_owned(),
             self_id,
             secret,
             sync_wanted: Notify::new(),
+            reminders_wanted: Notify::new(),
             app: OnceLock::new(),
         };
         // L'appareil s'inscrit lui-même : les autres apprennent ainsi son nom.
@@ -195,6 +219,18 @@ impl AppState {
             }
         }
         Ok(state)
+    }
+
+    /// Signale un problème à la personne (affiché par l'interface).
+    pub fn notice(&self, message: String) {
+        eprintln!("{message}");
+        self.notices
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(message.clone());
+        if let Some(app) = self.app.get() {
+            let _ = app.emit("notice", message);
+        }
     }
 
     pub fn device_name(&self) -> String {
@@ -216,6 +252,9 @@ impl AppState {
             NOTES_DOC => self.notes.change("de synchroniser les notes", |d| {
                 d.receive_sync_message(state, message)
             }),
+            TASKS_DOC => self.tasks.change("de synchroniser les tâches", |d| {
+                d.receive_sync_message(state, message)
+            }),
             DEVICES_DOC => self.devices.change("de synchroniser les appareils", |d| {
                 d.receive_sync_message(state, message)
             }),
@@ -226,6 +265,7 @@ impl AppState {
     fn with_doc<T>(&self, doc: &str, f: impl FnOnce(&mut dyn Syncable) -> T) -> Result<T, String> {
         match doc {
             NOTES_DOC => Ok(f(&mut *self.notes.lock())),
+            TASKS_DOC => Ok(f(&mut *self.tasks.lock())),
             DEVICES_DOC => Ok(f(&mut *self.devices.lock())),
             _ => Err(format!("document inconnu : {doc}")),
         }
@@ -235,7 +275,7 @@ impl AppState {
 impl Store for AppState {
     fn doc_names(&self) -> Vec<String> {
         // Les appareils d'abord : un nouvel appareil est connu avant ses notes.
-        vec![DEVICES_DOC.into(), NOTES_DOC.into()]
+        vec![DEVICES_DOC.into(), NOTES_DOC.into(), TASKS_DOC.into()]
     }
 
     fn generate(&self, doc: &str, state: &mut SyncState) -> Result<Option<Vec<u8>>, String> {
@@ -285,6 +325,9 @@ impl Store for AppState {
     }
 
     fn changed(&self, docs: &[String]) {
+        if docs.iter().any(|d| d == TASKS_DOC) {
+            self.reminders_wanted.notify_one();
+        }
         if let Some(app) = self.app.get() {
             if let Err(e) = app.emit("docs-changed", docs) {
                 eprintln!("Impossible de prévenir l'interface : {e}");
@@ -397,22 +440,29 @@ mod tests {
             .change("d'ajouter", |d| d.add("Lucas", "Depuis le PC", "", 1))
             .unwrap();
 
-        let (mut s_pc, mut s_phone) = (SyncState::new(), SyncState::new());
-        for _ in 0..10 {
-            let m1 = pc.generate(NOTES_DOC, &mut s_pc).unwrap();
-            let m2 = phone.generate(NOTES_DOC, &mut s_phone).unwrap();
-            if m1.is_none() && m2.is_none() {
-                break;
-            }
-            if let Some(m) = m1 {
-                phone.receive(NOTES_DOC, &mut s_phone, &m).unwrap();
-            }
-            if let Some(m) = m2 {
-                pc.receive(NOTES_DOC, &mut s_pc, &m).unwrap();
+        pc.tasks
+            .change("d'ajouter", |d| d.add("Lucas", "Pain", "", Some(5), 1))
+            .unwrap();
+
+        for doc in [NOTES_DOC, TASKS_DOC] {
+            let (mut s_pc, mut s_phone) = (SyncState::new(), SyncState::new());
+            for _ in 0..10 {
+                let m1 = pc.generate(doc, &mut s_pc).unwrap();
+                let m2 = phone.generate(doc, &mut s_phone).unwrap();
+                if m1.is_none() && m2.is_none() {
+                    break;
+                }
+                if let Some(m) = m1 {
+                    phone.receive(doc, &mut s_phone, &m).unwrap();
+                }
+                if let Some(m) = m2 {
+                    pc.receive(doc, &mut s_pc, &m).unwrap();
+                }
             }
         }
         let reloaded = AppState::load(&b, "Téléphone").unwrap();
         assert_eq!(reloaded.notes.lock().list().unwrap().len(), 1);
+        assert_eq!(reloaded.tasks.lock().list().len(), 1);
         assert!(phone.generate("inconnu", &mut SyncState::new()).is_err());
         fs::remove_dir_all(a).unwrap();
         fs::remove_dir_all(b).unwrap();

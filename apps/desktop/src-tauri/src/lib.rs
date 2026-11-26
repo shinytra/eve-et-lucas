@@ -2,8 +2,9 @@
 //!
 //! Ce crate ne contient que de la « plomberie » : il expose les fonctions du
 //! cœur (`couple-core`) à l'interface web via des commandes Tauri, enregistre
-//! les documents sur le disque (`store.rs`) et les synchronise avec les autres
-//! appareils (`sync.rs`). Aucune règle métier ici.
+//! les documents sur le disque (`store.rs`), les synchronise avec les autres
+//! appareils (`sync.rs`) et affiche les rappels des tâches (`reminders.rs`).
+//! Aucune règle métier ici.
 
 use std::{
     sync::Arc,
@@ -15,8 +16,10 @@ use tauri::{Manager, State};
 
 #[cfg(desktop)]
 mod desktop;
+mod reminders;
 mod store;
 mod sync;
+mod tasks;
 
 use store::AppState;
 
@@ -53,7 +56,18 @@ fn list_notes(state: State<'_, Arc<AppState>>) -> Result<Vec<Note>, String> {
 
 #[tauri::command]
 fn startup_warning(state: State<'_, Arc<AppState>>) -> Option<String> {
-    (!state.startup_warnings.is_empty()).then(|| state.startup_warnings.join("\n"))
+    let notices = state
+        .notices
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    let all: Vec<String> = state
+        .startup_warnings
+        .iter()
+        .cloned()
+        .chain(notices)
+        .collect();
+    (!all.is_empty()).then(|| all.join("\n"))
 }
 
 #[tauri::command]
@@ -121,6 +135,7 @@ pub fn run() {
     }
 
     let result = builder
+        .plugin(tauri_plugin_notification::init())
         .manage(sync::SyncHandle::default())
         .setup(|app| {
             #[cfg(feature = "mcp-bridge")]
@@ -132,7 +147,8 @@ pub fn run() {
             };
             let state = Arc::new(AppState::load(&data_dir, &default_device_name())?);
             app.manage(state.clone());
-            sync::start(app.handle(), state);
+            sync::start(app.handle(), state.clone());
+            reminders::start(app.handle(), state);
             #[cfg(desktop)]
             desktop::setup(app)?;
             Ok(())
@@ -143,6 +159,11 @@ pub fn run() {
             add_note,
             update_note,
             delete_note,
+            tasks::list_tasks,
+            tasks::add_task,
+            tasks::update_task,
+            tasks::set_task_done,
+            tasks::delete_task,
             sync::list_devices,
             sync::this_device,
             sync::rename_this_device,
