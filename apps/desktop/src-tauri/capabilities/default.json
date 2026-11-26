@@ -4,7 +4,6 @@
   "description": "Permissions de la fenêtre principale.",
   "windows": ["main"],
   "permissions": [
-    "core:default",
-    "mcp-bridge:default"
+    "core:default"
   ]
 }

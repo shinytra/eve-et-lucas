@@ -1,0 +1,6 @@
+{
+  "identifier": "mcp-bridge-dev",
+  "description": "Ajoutée au démarrage seulement avec --features mcp-bridge (voir src/lib.rs).",
+  "windows": ["main"],
+  "permissions": ["mcp-bridge:default"]
+}

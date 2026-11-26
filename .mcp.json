@@ -2,11 +2,11 @@
   "mcpServers": {
     "tauri": {
       "command": "npx",
-      "args": ["-y", "@hypothesi/tauri-mcp-server"]
+      "args": ["-y", "@hypothesi/tauri-mcp-server@0.13.2"]
     },
     "mobile": {
       "command": "npx",
-      "args": ["-y", "@mobilenext/mobile-mcp@latest"]
+      "args": ["-y", "@mobilenext/mobile-mcp@1.0.20"]
     }
   }
 }

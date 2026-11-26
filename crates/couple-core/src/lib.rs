@@ -15,6 +15,8 @@ pub enum Error {
     NoteNotFound(String),
     #[error("une note doit avoir un titre ou un contenu")]
     EmptyNote,
+    #[error("une note doit avoir un auteur")]
+    MissingAuthor,
     // Les erreurs des bibliothèques sont « boxées » pour garder `Error` petit.
     #[error("document Automerge invalide : {0}")]
     Automerge(Box<automerge::AutomergeError>),

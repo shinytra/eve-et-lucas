@@ -17,7 +17,9 @@ cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace                  # tests du cœur
 cargo run -p eve-et-lucas-desktop       # lance l'appli PC
-cargo tauri dev                         # idem, avec la CLI Tauri (cargo install tauri-cli --version "^2")
+cargo run -p eve-et-lucas-desktop --features mcp-bridge   # idem, pilotable par le serveur MCP Tauri
+cargo tauri dev --features mcp-bridge   # idem, avec la CLI Tauri (cargo install tauri-cli --version "^2")
+cd apps/desktop/e2e && npm install && npm test   # test de bout en bout via le MCP Tauri (appli lancée avec --features mcp-bridge)
 cargo tauri android init                # plus tard : génère le projet Android
 cargo tauri android dev
 ```
@@ -28,8 +30,11 @@ Sous Linux, Tauri a besoin de `libwebkit2gtk-4.1-dev libayatana-appindicator3-de
 
 - Textes de l'interface, messages d'erreur et commentaires en français.
 - Pas de `unwrap()` hors des tests. Erreurs du cœur via `couple_core::Error` (thiserror), converties en `String` dans les commandes Tauri.
-- Toute nouvelle donnée partagée : tests dans le cœur, dont au moins un test de fusion entre deux appareils.
+- Toute nouvelle donnée partagée : tests dans le cœur, dont au moins un test de fusion entre deux appareils. Pour simuler un deuxième appareil, utiliser `fork()`, jamais `clone()` (même identifiant d'appareil Automerge).
+- Une entrée illisible venue d'un autre appareil est ignorée, jamais bloquante. Un fichier local illisible est mis de côté (`.corrompu-<date>`) avec un avertissement, sans empêcher l'appli de démarrer.
+- Une modification se fait sur une copie du document, enregistrée (avec `sync_all`) avant de remplacer celle en mémoire.
 - Les dates sont des millisecondes Unix (`i64`) passées en paramètre au cœur, pour des tests déterministes.
+- CSP : `csp` (versions distribuées) reste stricte. `devCsp` autorise `unsafe-inline`/`unsafe-eval` uniquement pour que le pont MCP injecte ses scripts en développement. Jamais de script inline dans `ui/`.
 - L'interface doit rester utilisable à 360 px de large (elle servira telle quelle sur Android).
 - Avant un commit : skill `verifier` (fmt, clippy, tests). La CI GitHub fait la même chose.
 
@@ -39,7 +44,7 @@ Déclaré dans `.claude/settings.json` et `.mcp.json` ; Claude Code propose de l
 
 - **Plugins officiels** (anthropics/claude-plugins-official) : `rust-analyzer-lsp` (erreurs et types Rust en direct), `kotlin-lsp` (modules Android), `context7` (doc à jour de Tauri 2, iroh, Automerge : à consulter avant d'utiliser une API récente), `feature-dev`, `pr-review-toolkit`, `commit-commands`, `claude-md-management`, `security-guidance`, `frontend-design`, `skill-creator`.
 - **Plugins communautaires** (wshobson/agents) : `systems-programming` (agent Rust), `multi-platform-apps` (mobile + PC), `tdd-workflows`.
-- **Serveurs MCP** : `tauri` (hypothesi/mcp-server-tauri : captures, clics, logs et IPC de l'appli qui tourne ; le plugin `tauri-plugin-mcp-bridge` est activé en debug et n'écoute qu'en local) et `mobile` (mobile-next/mobile-mcp : piloter l'émulateur ou un téléphone Android).
+- **Serveurs MCP** (versions épinglées, à mettre à jour avec `tauri-plugin-mcp-bridge`) : `tauri` (hypothesi/mcp-server-tauri : captures, clics, logs et IPC de l'appli qui tourne ; le plugin `tauri-plugin-mcp-bridge` n'est compilé qu'avec `--features mcp-bridge` et n'écoute qu'en local. Il n'a pas d'authentification : ne jamais distribuer un build avec cette option) et `mobile` (mobile-next/mobile-mcp : piloter l'émulateur ou un téléphone Android).
 - **Hook** : `cargo fmt` après chaque modification de fichier.
 - **Agent du projet** : `tauri-android` (`.claude/agents/`).
 - **Skills du projet** : `verifier`, `nouvelle-fonctionnalite` (`.claude/skills/`).

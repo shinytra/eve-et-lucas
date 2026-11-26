@@ -20,5 +20,8 @@ serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2.12", features = [] }
 # Pont pour le serveur MCP Tauri (Claude Code voit et pilote l'appli).
-# Activé seulement dans les builds de debug, voir src/lib.rs.
-tauri-plugin-mcp-bridge = "0.13"
+# Seulement avec `--features mcp-bridge`, jamais dans une version distribuée.
+tauri-plugin-mcp-bridge = { version = "=0.13.2", optional = true }
+
+[features]
+mcp-bridge = ["dep:tauri-plugin-mcp-bridge"]
