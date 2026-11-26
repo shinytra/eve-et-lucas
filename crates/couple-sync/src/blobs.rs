@@ -96,7 +96,7 @@ pub(crate) fn only_peers<S: Store>(shared: Arc<Shared<S>>) -> EventSender {
 
 impl<S: Store> SyncNode<S> {
     /// Range un contenu et renvoie son empreinte (hexadécimal). Il est
-    /// gardé jusqu'à [`SyncNode::forget_blob`].
+    /// gardé jusqu'à [`SyncNode::forget_blob`] ou [`SyncNode::retain_blobs`].
     pub async fn add_blob(&self, bytes: Vec<u8>) -> Result<String> {
         let tag = self
             .blobs
@@ -108,6 +108,51 @@ impl<S: Store> SyncNode<S> {
         let hash = tag.hash();
         self.protect(hash).await?;
         Ok(hash.to_hex())
+    }
+
+    /// Comme [`SyncNode::add_blob`], à partir d'un fichier (chemin absolu),
+    /// sans le charger en mémoire.
+    pub async fn add_blob_from_path(&self, path: &Path) -> Result<String> {
+        let tag = self
+            .blobs
+            .api()
+            .add_path(path)
+            .temp_tag()
+            .await
+            .map_err(store_err)?;
+        let hash = tag.hash();
+        self.protect(hash).await?;
+        Ok(hash.to_hex())
+    }
+
+    /// Ne garde que les contenus de `keep` (empreintes encore partagées) : les
+    /// autres seront effacés au prochain ménage. Sert quand un fichier a été
+    /// supprimé sur un autre appareil.
+    pub async fn retain_blobs(&self, keep: &[String]) -> Result<usize> {
+        use iroh_blobs::api::tags::DeleteOptions;
+        let mut stale = Vec::new();
+        let mut tags = self
+            .blobs
+            .api()
+            .tags()
+            .list_prefix(TAG_PREFIX)
+            .await
+            .map_err(store_err)?;
+        while let Some(tag) = n0_future::StreamExt::next(&mut tags).await {
+            let tag = tag.map_err(store_err)?;
+            if !keep.contains(&tag.hash.to_hex()) {
+                stale.push(tag.name);
+            }
+        }
+        for name in &stale {
+            self.blobs
+                .api()
+                .tags()
+                .delete_with_opts(DeleteOptions::single(name.as_ref()))
+                .await
+                .map_err(store_err)?;
+        }
+        Ok(stale.len())
     }
 
     async fn protect(&self, hash: Hash) -> Result<()> {
@@ -181,6 +226,9 @@ impl<S: Store> SyncNode<S> {
     }
 
     async fn fetch_from(&self, peer: iroh::EndpointId, hash: Hash) -> Result<()> {
+        // Étiqueté avant de commencer : le ménage ne touche pas à un
+        // téléchargement en cours, et une partie reçue sert à reprendre.
+        self.protect(hash).await?;
         let addr = self
             .shared
             .addrs()
@@ -206,16 +254,21 @@ impl<S: Store> SyncNode<S> {
         if !self.blobs.api().has(hash).await.unwrap_or(false) {
             return Err(SyncError::Protocol("fichier incomplet".to_owned()));
         }
-        self.protect(hash).await
+        Ok(())
     }
 
-    /// Après une synchro avec `peer` : télécharge chez lui les fichiers voulus
-    /// qui manquent. Un échec n'empêche pas les autres (réessayé plus tard).
-    pub(crate) async fn fetch_wanted_from(&self, peer: iroh::EndpointId) -> Vec<String> {
+    /// Télécharge chez `peer` les fichiers voulus qui manquent (à appeler
+    /// après une synchro). Un échec n'empêche pas les autres (réessayé plus
+    /// tard). Renvoie les empreintes téléchargées.
+    pub async fn fetch_wanted_from(&self, peer: iroh::EndpointId) -> Vec<String> {
         let mut downloaded = Vec::new();
         for hash in self.shared.store.wanted_blobs() {
             let Ok(parsed) = parse(&hash) else { continue };
             if self.blobs.api().has(parsed).await.unwrap_or(false) {
+                // Présent mais peut-être pas étiqueté (ménage) : on le protège.
+                if let Err(e) = self.protect(parsed).await {
+                    eprintln!("Fichier {} non protégé : {e}", parsed.fmt_short());
+                }
                 continue;
             }
             match self.fetch_from(peer, parsed).await {

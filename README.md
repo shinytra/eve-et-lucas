@@ -10,7 +10,7 @@ L'appli PC gère des notes partagées enregistrées en local et tourne en tâche
 
 La partie « Tâches » permet de noter ce qu'il y a à faire, pour l'un, l'autre ou les deux, avec un rappel à une date et une heure. À l'échéance, une notification s'affiche sur chaque appareil : sur téléphone elle reste affichée jusqu'à ce que la tâche soit cochée (si on la balaie, elle revient 15 minutes plus tard), sur PC elle revient toutes les heures.
 
-La partie « Fichiers partagés » envoie des fichiers (500 Mo au plus) directement d'un appareil à l'autre, sans serveur. Le PC garde une copie de tout. Les téléphones téléchargent d'office les images, et le reste quand on appuie sur « Télécharger ». « Enregistrer » range le fichier dans le dossier Téléchargements.
+La partie « Fichiers partagés » envoie des fichiers (500 Mo au plus) directement d'un appareil à l'autre, sans serveur. Le PC garde une copie de tout. Les téléphones téléchargent d'office les images, et le reste quand on appuie sur « Télécharger ». Sur PC, « Enregistrer » range le fichier dans le dossier Téléchargements (sur téléphone, ça viendra plus tard).
 
 Les appareils se synchronisent entre eux : dans la partie « Appareils », « Appairer un appareil » affiche un QR code (valable 10 minutes, une seule fois) à scanner ou à coller dans « Rejoindre avec un code » sur l'autre appareil. Ensuite, chaque modification est envoyée aux autres appareils joignables, et une synchro a lieu au moins toutes les minutes. La feuille de route complète est dans [CLAUDE.md](CLAUDE.md).
 

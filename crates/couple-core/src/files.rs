@@ -197,6 +197,37 @@ pub fn clean_name(name: &str) -> Result<String> {
     Ok(cleaned)
 }
 
+/// Nom à utiliser pour enregistrer le fichier sur le disque : celui de
+/// [`clean_name`], plus prudent encore. Les noms réservés de Windows (`CON`,
+/// `NUL.txt`…) reçoivent un `_` devant, et le nom est raccourci à 200 octets
+/// (limite de 255 octets des systèmes de fichiers) en gardant l'extension.
+pub fn disk_name(name: &str) -> Result<String> {
+    const MAX_BYTES: usize = 200;
+    const RESERVED: [&str; 22] = [
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    let mut name = clean_name(name)?;
+    let first = name.split('.').next().unwrap_or_default().trim_end();
+    if RESERVED.iter().any(|r| r.eq_ignore_ascii_case(first)) {
+        name.insert(0, '_');
+    }
+    if name.len() > MAX_BYTES {
+        let (stem, ext) = match name.rsplit_once('.') {
+            Some((stem, ext)) if !stem.is_empty() && ext.len() <= 16 => {
+                (stem.to_owned(), format!(".{ext}"))
+            }
+            _ => (name.clone(), String::new()),
+        };
+        let mut cut = MAX_BYTES - ext.len();
+        while !stem.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        name = format!("{}{ext}", &stem[..cut]);
+    }
+    Ok(name)
+}
+
 fn clean_mime(mime: &str) -> String {
     let mime = mime.trim();
     let valid = mime.len() <= 100
@@ -255,6 +286,19 @@ mod tests {
             assert!(clean_name(bad).is_err(), "{bad:?} devrait être refusé");
         }
         assert!(clean_name(&"a".repeat(MAX_NAME + 1)).is_err());
+    }
+
+    #[test]
+    fn disk_names_are_safe_everywhere() {
+        assert_eq!(disk_name("photo.png").unwrap(), "photo.png");
+        assert_eq!(disk_name("NUL.txt").unwrap(), "_NUL.txt");
+        assert_eq!(disk_name("con").unwrap(), "_con");
+        assert_eq!(disk_name("Com1.tar.gz").unwrap(), "_Com1.tar.gz");
+        assert_eq!(disk_name("console.txt").unwrap(), "console.txt");
+        let long = format!("{}.jpg", "é".repeat(150));
+        let cut = disk_name(&long).unwrap();
+        assert!(cut.len() <= 200 && cut.ends_with(".jpg"), "{cut}");
+        assert!(disk_name("../").is_err());
     }
 
     #[test]

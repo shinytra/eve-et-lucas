@@ -14,9 +14,9 @@
 //!
 //! - **Fichiers** (ALPN d'iroh-blobs) : le contenu des fichiers partagés est
 //!   rangé par empreinte BLAKE3 et transféré de façon vérifiée. Seuls les
-//!   appareils appairés peuvent en demander. Après chaque synchro, les
-//!   fichiers que l'appli veut ([`Store::wanted_blobs`]) et qui manquent sont
-//!   téléchargés depuis l'appareil avec lequel on vient de se synchroniser.
+//!   appareils appairés peuvent en demander. L'appli télécharge ceux qu'elle
+//!   veut ([`Store::wanted_blobs`]) avec [`SyncNode::fetch_wanted_from`], à
+//!   part, pour qu'un gros fichier ne retarde pas la synchro des documents.
 //!
 //! Le stockage (où sont les documents, comment ils sont enregistrés) est fourni
 //! par l'appli via le trait [`Store`].
@@ -200,8 +200,6 @@ struct DocHeader {
 pub struct SyncReport {
     /// Documents modifiés de notre côté.
     pub changed: Vec<String>,
-    /// Fichiers téléchargés depuis ce pair (empreintes).
-    pub downloaded: Vec<String>,
 }
 
 struct Pending {
@@ -386,7 +384,6 @@ impl<S: Store> SyncNode<S> {
             }
         }
         conn.close(0u32.into(), b"fini");
-        report.downloaded = self.fetch_wanted_from(peer).await;
         Ok(report)
     }
 

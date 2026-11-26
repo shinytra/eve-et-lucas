@@ -274,22 +274,42 @@ async fn wanted_files_are_downloaded_after_sync() {
     assert!(!lucas.has_blob(&hash).await);
 
     // Sans demande, rien n'est téléchargé.
-    let report = lucas.sync_with(pc.id()).await.unwrap();
-    assert!(report.downloaded.is_empty());
+    assert!(lucas.fetch_wanted_from(pc.id()).await.is_empty());
 
     lucas_store.wanted.lock().unwrap().push(hash.clone());
-    let report = lucas.sync_with(pc.id()).await.unwrap();
-    assert_eq!(report.downloaded, vec![hash.clone()]);
+    assert_eq!(lucas.fetch_wanted_from(pc.id()).await, vec![hash.clone()]);
     assert_eq!(*lucas_store.received.lock().unwrap(), vec![hash.clone()]);
     assert_eq!(lucas.read_blob(&hash).await.unwrap(), content);
     // Déjà là : pas de nouveau téléchargement.
-    assert!(lucas
-        .sync_with(pc.id())
-        .await
-        .unwrap()
-        .downloaded
-        .is_empty());
+    assert!(lucas.fetch_wanted_from(pc.id()).await.is_empty());
+
+    // Fichier supprimé ailleurs : son contenu n'est plus gardé.
+    let other = lucas.add_blob(b"autre".to_vec()).await.unwrap();
+    assert_eq!(
+        lucas
+            .retain_blobs(std::slice::from_ref(&hash))
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(lucas.retain_blobs(&[hash.clone(), other]).await.unwrap(), 0);
     drop(pc_store);
+}
+
+#[tokio::test]
+async fn files_can_be_added_from_disk() {
+    let (_store, pc) = node("PC").await;
+    let dir = std::env::temp_dir().join(format!("couple-sync-import-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("envoi.bin");
+    std::fs::write(&path, b"contenu sur le disque").unwrap();
+    let from_disk = pc.add_blob_from_path(&path).await.unwrap();
+    let from_memory = pc
+        .add_blob(b"contenu sur le disque".to_vec())
+        .await
+        .unwrap();
+    assert_eq!(from_disk, from_memory);
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[tokio::test]

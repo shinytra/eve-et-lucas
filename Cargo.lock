@@ -937,6 +937,7 @@ dependencies = [
  "getrandom 0.3.4",
  "iroh",
  "iroh-blobs",
+ "n0-future",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -1536,6 +1537,7 @@ version = "0.1.0"
 dependencies = [
  "couple-core",
  "couple-sync",
+ "data-encoding",
  "qrcode",
  "serde",
  "serde_json",
@@ -1548,6 +1550,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "time",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

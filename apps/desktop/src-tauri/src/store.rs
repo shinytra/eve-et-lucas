@@ -195,6 +195,11 @@ pub struct AppState {
     pub sync_wanted: Notify,
     /// Réveille la boucle des rappels quand les tâches ont changé.
     pub reminders_wanted: Notify,
+    /// Réveille la boucle des téléchargements de fichiers.
+    pub downloads_wanted: Notify,
+    /// Empêche le ménage des contenus pendant qu'un fichier est partagé
+    /// (entre le rangement du contenu et son ajout à la liste).
+    pub blob_guard: tokio::sync::Mutex<()>,
     /// Pour prévenir l'interface quand la synchro a changé des documents.
     pub app: OnceLock<AppHandle>,
 }
@@ -221,6 +226,8 @@ impl AppState {
             secret,
             sync_wanted: Notify::new(),
             reminders_wanted: Notify::new(),
+            downloads_wanted: Notify::new(),
+            blob_guard: tokio::sync::Mutex::new(()),
             app: OnceLock::new(),
         };
         // L'appareil s'inscrit lui-même : les autres apprennent ainsi son nom.
@@ -360,12 +367,18 @@ impl Store for AppState {
     }
 
     fn blobs_received(&self, _hashes: &[String]) {
-        self.changed(&[FILES_DOC.to_owned()]);
+        // Seulement l'interface : pas besoin de relancer les téléchargements.
+        if let Some(app) = self.app.get() {
+            let _ = app.emit("docs-changed", [FILES_DOC]);
+        }
     }
 
     fn changed(&self, docs: &[String]) {
         if docs.iter().any(|d| d == TASKS_DOC) {
             self.reminders_wanted.notify_one();
+        }
+        if docs.iter().any(|d| d == FILES_DOC) {
+            self.downloads_wanted.notify_one();
         }
         if let Some(app) = self.app.get() {
             if let Err(e) = app.emit("docs-changed", docs) {

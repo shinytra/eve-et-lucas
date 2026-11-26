@@ -138,6 +138,7 @@ pub fn run() {
     let result = builder
         .plugin(tauri_plugin_notification::init())
         .manage(sync::SyncHandle::default())
+        .manage(files::Uploads::default())
         .setup(|app| {
             #[cfg(feature = "mcp-bridge")]
             app.add_capability(include_str!("../capabilities-dev/mcp-bridge.json"))?;
@@ -166,7 +167,10 @@ pub fn run() {
             tasks::set_task_done,
             tasks::delete_task,
             files::list_files,
-            files::share_file,
+            files::upload_start,
+            files::upload_chunk,
+            files::upload_cancel,
+            files::upload_finish,
             files::delete_file,
             files::download_file,
             files::file_content,

@@ -21,6 +21,8 @@ qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 tokio = { version = "1", features = ["sync", "time", "rt-multi-thread"] }
 serde.workspace = true
 serde_json.workspace = true
+uuid.workspace = true
+data-encoding = "2"
 tauri = { version = "2.12", features = ["tray-icon"] }
 tauri-plugin-notification = "2.8"
 # Pont pour le serveur MCP Tauri (Claude Code voit et pilote l'appli).

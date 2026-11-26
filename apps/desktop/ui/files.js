@@ -12,6 +12,8 @@
   const errorBox = $("file-error");
   const statusLine = $("file-status");
   const MAX_SIZE = 500 * 1024 * 1024;
+  // L'enregistrement dans Téléchargements n'existe pas encore sur téléphone.
+  const isPhone = /Android|iPhone|iPad/i.test(navigator.userAgent);
 
   // Adresses blob: des aperçus, libérées à chaque nouvel affichage.
   let previews = [];
@@ -88,14 +90,14 @@
 
         const actions = document.createElement("div");
         actions.className = "actions";
-        if (file.available) {
+        if (file.available && !isPhone) {
           actions.append(
             button("Enregistrer", async () => {
               const path = await invoke("save_file", { id: file.id });
               showStatus(`Enregistré : ${path}`);
             }),
           );
-        } else {
+        } else if (!file.available) {
           actions.append(
             button("Télécharger", async () => {
               showStatus(`Téléchargement de « ${file.name} »…`);
@@ -137,18 +139,38 @@
     }
   }
 
-  async function share(file) {
+  // Par morceaux en base64 : Android ne sait pas passer de binaire brut à Rust.
+  const CHUNK = 2 * 1024 * 1024;
+
+  function toBase64(bytes) {
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(binary);
+  }
+
+  async function share(file, onProgress) {
     if (file.size > MAX_SIZE) {
       throw new Error(`« ${file.name} » dépasse 500 Mo.`);
     }
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    await invoke("share_file", bytes, {
-      headers: {
-        "x-name": encodeURIComponent(file.name),
-        "x-mime": encodeURIComponent(file.type || ""),
-        "x-author": encodeURIComponent($("author").value),
-      },
+    const id = await invoke("upload_start", {
+      name: file.name,
+      mime: file.type || "",
+      author: $("author").value,
+      size: file.size,
     });
+    try {
+      for (let offset = 0; offset < file.size; offset += CHUNK) {
+        const bytes = new Uint8Array(await file.slice(offset, offset + CHUNK).arrayBuffer());
+        await invoke("upload_chunk", { id, data: toBase64(bytes) });
+        onProgress(Math.min(1, (offset + CHUNK) / file.size));
+      }
+      await invoke("upload_finish", { id });
+    } catch (e) {
+      invoke("upload_cancel", { id }).catch(() => {});
+      throw e;
+    }
   }
 
   shareButton.addEventListener("click", () => input.click());
@@ -160,8 +182,9 @@
     shareButton.disabled = true;
     try {
       for (const [i, file] of chosen.entries()) {
-        showStatus(`Envoi de « ${file.name} » (${i + 1}/${chosen.length})…`);
-        await share(file);
+        const label = `Envoi de « ${file.name} » (${i + 1}/${chosen.length})`;
+        showStatus(`${label}…`);
+        await share(file, (p) => showStatus(`${label} : ${Math.round(p * 100)} %`));
       }
       showStatus(null);
     } catch (e) {
