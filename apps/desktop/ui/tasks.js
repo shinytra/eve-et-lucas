@@ -48,6 +48,7 @@
     editingId = null;
     form.reset();
     saveButton.textContent = "Ajouter";
+    showError(null);
     window.__ui?.fermer(form);
   }
 
@@ -102,6 +103,7 @@
           if (check.checked) justChecked.add(task.id);
           const ok = await run(() => invoke("set_task_done", { id: task.id, done: check.checked, by: me() }));
           if (!ok) {
+            justChecked.delete(task.id);
             check.checked = !check.checked;
             check.disabled = false;
           }

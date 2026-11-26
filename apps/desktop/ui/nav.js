@@ -196,7 +196,11 @@
     if (event.key === "Escape") fermerPlus();
   });
 
-  window.addEventListener("hashchange", () => afficher(location.hash.slice(1)));
+  window.addEventListener("hashchange", () => {
+    const nom = nomValide(location.hash.slice(1));
+    if (location.hash.slice(1) !== nom) history.replaceState(null, "", `#${nom}`);
+    afficher(nom);
+  });
   window.addEventListener("resize", majIndicateur);
   telephone.addEventListener?.("change", () => {
     fermerPlus();

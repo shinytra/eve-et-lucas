@@ -59,6 +59,11 @@
     requestAnimationFrame(pas);
   }
 
+  // Le compte à rebours ne défile qu'à l'affichage de l'écran ou quand il
+  // change, pas à chaque rafraîchissement de la minute.
+  let derniereDate = null;
+  let animerDate = true;
+
   function renderDate(dates) {
     const carte = $("accueil-date");
     const prochaine = dates.find((d) => d.next != null);
@@ -74,8 +79,13 @@
     });
     const info = el("span", "meta", prochaine.years != null ? `${jour} · ${prochaine.years} an${prochaine.years > 1 ? "s" : ""}` : jour);
     carte.replaceChildren(el("span", "etiquette", "Prochaine date"), compte, titre, info);
+    const cle = `${prochaine.id}:${prochaine.days_left}`;
+    const animer = animerDate || cle !== derniereDate;
+    derniereDate = cle;
+    animerDate = false;
     if (prochaine.days_left === 0) compte.textContent = "Aujourd'hui !";
-    else compter(compte, prochaine.days_left, (v) => `J-${v}`);
+    else if (animer) compter(compte, prochaine.days_left, (v) => `J-${v}`);
+    else compte.textContent = `J-${prochaine.days_left}`;
   }
 
   function renderTaches(taches) {
@@ -156,7 +166,10 @@
     );
   }
 
+  let dernierEtat = null;
+
   function renderSynchro(etat) {
+    dernierEtat = etat;
     const p = $("accueil-synchro");
     if (!etat || etat.error || !etat.total) {
       p.hidden = true;
@@ -170,26 +183,44 @@
         : "Aucun autre appareil joint pour l'instant";
   }
 
+  // Un rafraîchissement demandé pendant un autre est relancé ensuite, pour ne
+  // jamais afficher des données plus anciennes que la dernière demande.
   let enCours = false;
+  let relancer = false;
   async function refresh() {
-    if (enCours) return;
+    if (enCours) {
+      relancer = true;
+      return;
+    }
     enCours = true;
-    salut();
-    // Chaque carte se remplit même si une autre source échoue.
-    const sources = [
-      ["list_dates", renderDate],
-      ["list_tasks", renderTaches],
-      ["list_arrivals", renderArrivee],
-      ["list_notes", renderNote],
-    ];
-    const resultats = await Promise.allSettled(sources.map(([cmd]) => invoke(cmd)));
-    const erreurs = [];
-    resultats.forEach((r, i) => {
-      if (r.status === "fulfilled") sources[i][1](r.value ?? []);
-      else erreurs.push(String(r.reason));
-    });
-    showError(erreurs.length ? erreurs.join("\n") : null);
-    enCours = false;
+    try {
+      salut();
+      if (dernierEtat) renderSynchro(dernierEtat);
+      // Chaque carte se remplit même si une autre source échoue.
+      const sources = [
+        ["list_dates", renderDate],
+        ["list_tasks", renderTaches],
+        ["list_arrivals", renderArrivee],
+        ["list_notes", renderNote],
+      ];
+      const resultats = await Promise.allSettled(sources.map(([cmd]) => invoke(cmd)));
+      const erreurs = [];
+      resultats.forEach((r, i) => {
+        try {
+          if (r.status === "fulfilled") sources[i][1](r.value ?? []);
+          else erreurs.push(String(r.reason));
+        } catch (e) {
+          erreurs.push(String(e));
+        }
+      });
+      showError(erreurs.length ? erreurs.join("\n") : null);
+    } finally {
+      enCours = false;
+    }
+    if (relancer) {
+      relancer = false;
+      refresh();
+    }
   }
 
   invoke("sync_status").then(renderSynchro).catch(() => {});
@@ -198,7 +229,9 @@
     if (window.__ui?.ecran() === "accueil") refresh();
   });
   document.addEventListener("ecran", ({ detail }) => {
-    if (detail === "accueil") refresh();
+    if (detail !== "accueil") return;
+    animerDate = true;
+    refresh();
   });
   $("author").addEventListener("change", () => {
     if (window.__ui?.ecran() === "accueil") refresh();

@@ -48,6 +48,7 @@ function resetForm() {
   editingId = null;
   form.reset();
   saveButton.textContent = "Ajouter";
+  showError(null);
   window.__ui?.fermer(form);
 }
 

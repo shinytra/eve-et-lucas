@@ -84,6 +84,7 @@
     form.reset();
     syncCountBox();
     saveButton.textContent = "Ajouter";
+    showError(null);
     window.__ui?.fermer(form);
   }
 
