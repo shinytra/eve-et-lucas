@@ -177,7 +177,9 @@ mod tests {
         let ids = |v: Vec<Arrival>| v.into_iter().map(|a| a.id).collect::<Vec<_>>();
         assert_eq!(ids(doc.to_ring("pc", &[], now)), vec![recent.id.clone()]);
         // Déjà signalée : plus rien.
-        assert!(doc.to_ring("pc", std::slice::from_ref(&recent.id), now).is_empty());
+        assert!(doc
+            .to_ring("pc", std::slice::from_ref(&recent.id), now)
+            .is_empty());
         // L'autre téléphone, lui, sonne pour l'arrivée du PC… et pas pour la sienne.
         assert_eq!(ids(doc.to_ring("tel-eve", &[], now)), vec![mine.id]);
         assert!(!ids(doc.to_ring("pc", &[], now)).contains(&old.id));
