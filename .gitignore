@@ -1,0 +1,7 @@
+/target
+**/target
+node_modules/
+/apps/desktop/src-tauri/gen/
+.DS_Store
+*.automerge
+apps/desktop/e2e/capture-e2e.png

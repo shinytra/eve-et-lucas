@@ -1,0 +1,154 @@
+:root {
+  --bg: #fff8f6;
+  --surface: #ffffff;
+  --text: #2b2024;
+  --muted: #7a6a70;
+  --accent: #e85d75;
+  --accent-text: #ffffff;
+  --border: #f0dde1;
+  --danger: #b3261e;
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1618;
+    --surface: #271f22;
+    --text: #f5e9ec;
+    --muted: #b8a5ab;
+    --accent: #ff7b93;
+    --accent-text: #1c1618;
+    --border: #3a2e32;
+    --danger: #ff8a80;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: var(--accent);
+}
+
+h2 {
+  font-size: 1.1rem;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
+  color: inherit;
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.who select {
+  width: auto;
+  margin-left: 8px;
+}
+
+form {
+  display: grid;
+  gap: 8px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+button {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+button[type="submit"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+button.danger {
+  color: var(--danger);
+}
+
+#error {
+  margin: 0;
+  color: var(--danger);
+}
+
+#notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.note {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.note h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.note .body {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.note .meta,
+#empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}

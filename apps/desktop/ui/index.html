@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Eve &amp; Lucas</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Eve &amp; Lucas</h1>
+      <label class="who">
+        Je suis
+        <select id="author">
+          <option>Lucas</option>
+          <option>Eve</option>
+        </select>
+      </label>
+    </header>
+
+    <main>
+      <form id="note-form" autocomplete="off">
+        <input id="title" placeholder="Titre" maxlength="200" />
+        <textarea id="body" placeholder="Écris une note…" rows="4"></textarea>
+        <div class="actions">
+          <button type="button" id="cancel" hidden>Annuler</button>
+          <button type="submit" id="save">Ajouter</button>
+        </div>
+        <p id="error" role="alert" hidden></p>
+      </form>
+
+      <section aria-labelledby="notes-title">
+        <h2 id="notes-title">Notes partagées</h2>
+        <p id="empty" hidden>Aucune note pour l'instant.</p>
+        <ul id="notes"></ul>
+      </section>
+    </main>
+
+    <script src="main.js"></script>
+  </body>
+</html>

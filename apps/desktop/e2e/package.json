@@ -1,0 +1,13 @@
+{
+  "name": "eve-et-lucas-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Tests de bout en bout de l'appli PC, pilotée par le serveur MCP Tauri.",
+  "scripts": {
+    "test": "node notes.mjs capture-e2e.png"
+  },
+  "dependencies": {
+    "@hypothesi/tauri-mcp-server": "0.13.2",
+    "@modelcontextprotocol/sdk": "1.32.2"
+  }
+}
