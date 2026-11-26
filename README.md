@@ -6,7 +6,7 @@ Appli pour notre couple, sur PC et Android : notes partagées, tâches communes 
 
 ## État actuel
 
-Première étape : l'appli PC avec des notes partagées enregistrées en local. La synchro entre appareils arrive à l'étape suivante. La feuille de route complète est dans [CLAUDE.md](CLAUDE.md).
+L'appli PC gère des notes partagées enregistrées en local et tourne en tâche de fond : fermer la fenêtre la cache, l'icône dans la barre des tâches permet de la rouvrir ou de la quitter, et son menu propose « Lancer au démarrage de l'ordinateur ». La synchro entre appareils arrive à l'étape suivante. La feuille de route complète est dans [CLAUDE.md](CLAUDE.md).
 
 ## Lancer l'appli PC
 

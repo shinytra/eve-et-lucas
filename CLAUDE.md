@@ -6,7 +6,7 @@ Appli de couple pour Eve et Lucas, en Rust, pour Android et PC. Lucas valide cha
 
 - **Tauri 2** : un seul code pour PC (Windows/Linux) et Android. Interface web dans `apps/desktop/ui/` (HTML/CSS/JS sans étape de build pour l'instant), cœur en Rust.
 - **`crates/couple-core`** : toutes les données et règles métier. Ne dépend ni de Tauri ni du réseau. Chaque fonctionnalité a son propre document **Automerge** (notes, tâches, widgets…), dont la racine est une table `id -> élément` avec des identifiants UUID v4. Ainsi deux appareils qui n'ont jamais communiqué peuvent fusionner sans rien perdre (voir `notes.rs`).
-- **`apps/desktop/src-tauri`** : plomberie uniquement. Commandes Tauri qui appellent le cœur, enregistrement des documents dans le dossier de données de l'appli (écriture atomique : fichier temporaire puis renommage).
+- **`apps/desktop/src-tauri`** : plomberie uniquement. Ce qui est propre au PC (icône, lancement au démarrage, instance unique) est dans `src/desktop.rs`, compilé seulement avec `#[cfg(desktop)]` ; les plugins correspondants sont des dépendances réservées au PC dans `Cargo.toml`. Commandes Tauri qui appellent le cœur, enregistrement des documents dans le dossier de données de l'appli (écriture atomique : fichier temporaire puis renommage).
 - **Synchro (à venir)** : iroh 1.0 entre les trois pairs (téléphone de Lucas, téléphone d'Eve, PC). Le PC, allumé environ 95 % du temps, est le pair « boîte aux lettres » qui garde une copie de tout et héberge ntfy pour réveiller les téléphones. PC éteint : les téléphones se synchronisent directement entre eux.
 - **Kotlin (à venir)** : uniquement ce que Rust ne peut pas faire sur Android (géofencing en arrière-plan, widgets Glance, service au premier plan), sous forme de plugins Tauri maison dans `plugins/`. Jamais de code à la main dans `gen/android` (régénéré).
 
@@ -62,8 +62,9 @@ Plutôt que de réécrire, s'inspirer de (ou dépendre de) :
 
 ## Feuille de route
 
-1. ✅ Base Tauri 2 + notes partagées en local (cette étape).
-2. Appli PC en tâche de fond (icône de barre des tâches, lancement au démarrage) + synchro iroh + appairage par QR code.
+1. ✅ Base Tauri 2 + notes partagées en local.
+2. a. ✅ Appli PC en tâche de fond : icône dans la barre des tâches, fermer la fenêtre la cache, lancement au démarrage (option du menu de l'icône, démarre fenêtre cachée), une seule instance.
+   b. Synchro iroh entre appareils + appairage par QR code.
 3. Appli Android avec la même base.
 4. Tâches communes et rappels (notifications).
 5. Partage de fichiers P2P (iroh-blobs).

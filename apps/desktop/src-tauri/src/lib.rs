@@ -15,6 +15,9 @@ use std::{
 use couple_core::{Note, NotesDoc};
 use tauri::{Manager, State};
 
+#[cfg(desktop)]
+mod desktop;
+
 const NOTES_FILE: &str = "notes.automerge";
 
 struct AppState {
@@ -163,6 +166,11 @@ pub fn run() {
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
 
+    #[cfg(desktop)]
+    {
+        builder = desktop::plugins(builder).on_window_event(desktop::on_window_event);
+    }
+
     // Uniquement avec `--features mcp-bridge` (jamais dans une version
     // distribuée) : laisse Claude Code, via le serveur MCP Tauri, faire des
     // captures, cliquer et lire les logs. Ce pont n'a pas d'authentification.
@@ -181,6 +189,8 @@ pub fn run() {
             app.add_capability(include_str!("../capabilities-dev/mcp-bridge.json"))?;
             let data_dir = app.path().app_data_dir()?;
             app.manage(AppState::load(&data_dir)?);
+            #[cfg(desktop)]
+            desktop::setup(app)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
