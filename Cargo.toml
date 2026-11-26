@@ -21,3 +21,8 @@ serde_json = "1"
 thiserror = "2"
 uuid = { version = "1", features = ["v4"] }
 couple-core = { path = "crates/couple-core" }
+
+# Versions distribuées (installateur Windows, APK) : sans symboles de
+# débogage, pour des fichiers bien plus légers.
+[profile.release]
+strip = true

@@ -35,7 +35,7 @@ Les notes sont enregistrées dans le dossier de données de l'appli (`%APPDATA%\
 Les fichiers à installer sont sur la page **[Releases](https://github.com/shinytra/eve-et-lucas/releases/latest)** du dépôt :
 
 - **PC Windows** : `Eve-et-Lucas-…-Windows.exe`. Windows affiche « Windows a protégé votre ordinateur » (SmartScreen) car l'appli n'est pas signée par un éditeur payant : **Informations complémentaires**, puis **Exécuter quand même**.
-- **Android** : `Eve-et-Lucas-…-Android.apk`, à ouvrir sur le téléphone en autorisant l'installation depuis cette source. Installer aussi l'appli **ntfy** (Play Store ou F-Droid). C'est une version de test (clé de développement, téléphones ARM 64 bits, soit presque tous les téléphones récents).
+- **Android** : `Eve-et-Lucas-…-Android.apk`, à ouvrir sur le téléphone en autorisant l'installation depuis cette source. Installer aussi l'appli **ntfy** (Play Store ou F-Droid). Pour téléphones ARM 64 bits (presque tous les téléphones récents). Les versions suivantes s'installent par-dessus, sans désinstaller.
 
 Pour appairer le téléphone, ouvrir « Appareils » sur le PC, puis « Scanner le QR code » sur le téléphone.
 
@@ -44,7 +44,15 @@ Pour appairer le téléphone, ouvrir « Appareils » sur le PC, puis « Scanner 
 1. Monter `version` dans `apps/desktop/src-tauri/tauri.conf.json` (et `Cargo.toml` de l'appli).
 2. Onglet **Actions**, workflow **Version à télécharger**, **Run workflow** (ou pousser une étiquette `vX.Y.Z`). Il construit l'installateur Windows et l'APK, puis crée la Release `vX.Y.Z`.
 
-Pour que le téléphone accepte une mise à jour sans désinstaller l'appli, l'APK doit être signé avec la même clé à chaque version : créer une fois une clé (`keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"`) et la mettre en base64 dans le secret `ANDROID_DEBUG_KEYSTORE` du dépôt (Settings, Secrets and variables, Actions). Sans ce secret, chaque version a une clé différente.
+Pour que le téléphone accepte une mise à jour sans désinstaller l'appli, l'APK est signé avec la même clé à chaque version. Elle est rangée dans deux secrets du dépôt (Settings, Secrets and variables, Actions) : `ANDROID_KEYSTORE` (fichier `.jks` en base64, alias `eve-et-lucas`) et `ANDROID_KEYSTORE_PASSWORD`. Sans eux, la publication échoue (une PR signe avec une clé jetable). Pour créer une clé :
+
+```sh
+keytool -genkeypair -keystore eve-et-lucas.jks -storetype PKCS12 -alias eve-et-lucas \
+  -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Eve et Lucas"
+base64 -w0 eve-et-lucas.jks   # contenu du secret ANDROID_KEYSTORE
+```
+
+Garder une copie de cette clé : si elle est perdue, il faudra désinstaller l'appli une fois sur chaque téléphone pour passer à une nouvelle clé. Android refuse aussi une mise à jour dont la version est plus ancienne : toujours monter `version`.
 
 Chaque modification de `main` fabrique aussi un APK de test dans l'onglet **Actions** (workflow **Android**, fichier **eve-et-lucas-android-debug**, gardé 14 jours).
 
