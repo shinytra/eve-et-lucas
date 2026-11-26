@@ -170,6 +170,12 @@ pub struct AppState {
     pub devices: Persisted<DevicesDoc>,
     /// Messages à montrer au démarrage (fichier illisible, etc.).
     pub startup_warnings: Vec<String>,
+    /// Problèmes survenus après le démarrage (notifications refusées…),
+    /// montrés à l'ouverture de l'interface.
+    pub notices: Mutex<Vec<String>>,
+    /// Dossier de données de l'appli (rappels programmés sur téléphone).
+    #[cfg_attr(not(mobile), allow(dead_code))]
+    pub data_dir: PathBuf,
     /// Identifiant iroh de cet appareil.
     pub self_id: EndpointId,
     pub secret: SecretKey,
@@ -195,6 +201,8 @@ impl AppState {
             tasks,
             devices,
             startup_warnings,
+            notices: Mutex::new(Vec::new()),
+            data_dir: data_dir.to_owned(),
             self_id,
             secret,
             sync_wanted: Notify::new(),
@@ -211,6 +219,18 @@ impl AppState {
             }
         }
         Ok(state)
+    }
+
+    /// Signale un problème à la personne (affiché par l'interface).
+    pub fn notice(&self, message: String) {
+        eprintln!("{message}");
+        self.notices
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(message.clone());
+        if let Some(app) = self.app.get() {
+            let _ = app.emit("notice", message);
+        }
     }
 
     pub fn device_name(&self) -> String {

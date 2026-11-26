@@ -157,3 +157,6 @@ cancelButton.addEventListener("click", resetForm);
 window.__TAURI__.event?.listen("docs-changed", (event) => {
   if (event.payload?.includes("notes")) refresh();
 });
+
+// Problème survenu en tâche de fond (notifications refusées…).
+window.__TAURI__.event?.listen("notice", (event) => showError(String(event.payload)));

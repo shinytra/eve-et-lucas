@@ -56,7 +56,18 @@ fn list_notes(state: State<'_, Arc<AppState>>) -> Result<Vec<Note>, String> {
 
 #[tauri::command]
 fn startup_warning(state: State<'_, Arc<AppState>>) -> Option<String> {
-    (!state.startup_warnings.is_empty()).then(|| state.startup_warnings.join("\n"))
+    let notices = state
+        .notices
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    let all: Vec<String> = state
+        .startup_warnings
+        .iter()
+        .cloned()
+        .chain(notices)
+        .collect();
+    (!all.is_empty()).then(|| all.join("\n"))
 }
 
 #[tauri::command]
