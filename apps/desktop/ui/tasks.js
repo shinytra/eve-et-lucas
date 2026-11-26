@@ -16,6 +16,8 @@
   const list = $("tasks");
 
   let editingId = null;
+  // Tâches qui viennent d'être cochées ici : animées au prochain affichage.
+  const justChecked = new Set();
 
   function showError(message) {
     errorBox.textContent = message ?? "";
@@ -46,7 +48,8 @@
     editingId = null;
     form.reset();
     saveButton.textContent = "Ajouter";
-    cancelButton.hidden = true;
+    showError(null);
+    window.__ui?.fermer(form);
   }
 
   function startEdit(task) {
@@ -55,7 +58,7 @@
     assigneeSelect.value = task.assignee;
     dueInput.value = task.due_at == null ? "" : toInputValue(task.due_at);
     saveButton.textContent = "Enregistrer";
-    cancelButton.hidden = false;
+    window.__ui?.ouvrir(form);
     titleInput.focus();
   }
 
@@ -89,6 +92,7 @@
         li.className = "task";
         li.classList.toggle("done", task.done);
         li.classList.toggle("late", !task.done && task.due_at != null && task.due_at <= Date.now());
+        if (justChecked.delete(task.id)) li.classList.add("vient-cocher");
 
         const check = document.createElement("input");
         check.type = "checkbox";
@@ -96,8 +100,10 @@
         check.setAttribute("aria-label", task.done ? `Décocher « ${task.title} »` : `Cocher « ${task.title} »`);
         check.addEventListener("change", async () => {
           check.disabled = true;
+          if (check.checked) justChecked.add(task.id);
           const ok = await run(() => invoke("set_task_done", { id: task.id, done: check.checked, by: me() }));
           if (!ok) {
+            justChecked.delete(task.id);
             check.checked = !check.checked;
             check.disabled = false;
           }
@@ -113,18 +119,18 @@
         info.textContent = meta(task);
         text.append(title, info);
 
-        const edit = document.createElement("button");
-        edit.textContent = "Modifier";
+        const edit = window.__ui.iconButton("modifier", `Modifier « ${task.title} »`);
         edit.addEventListener("click", () => startEdit(task));
 
-        const del = document.createElement("button");
-        del.textContent = "Supprimer";
-        del.className = "danger";
+        const del = window.__ui.iconButton("supprimer", `Supprimer « ${task.title} »`, "danger");
         del.addEventListener("click", async () => {
           del.disabled = true;
+          await window.__ui.sortie(li);
           const ok = await run(() => invoke("delete_task", { id: task.id }));
-          if (!ok) del.disabled = false;
-          else if (editingId === task.id) resetForm();
+          if (!ok) {
+            del.disabled = false;
+            li.classList.remove("sortie");
+          } else if (editingId === task.id) resetForm();
         });
 
         const actions = document.createElement("div");
@@ -177,5 +183,9 @@
   setInterval(refresh, 60_000);
   tauri.event?.listen("docs-changed", (event) => {
     if (event.payload?.includes("tasks")) refresh();
+  });
+  // Tâche cochée depuis l'accueil.
+  document.addEventListener("donnees-modifiees", (event) => {
+    if (event.detail?.includes("tasks")) refresh();
   });
 })();

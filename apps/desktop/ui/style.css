@@ -208,34 +208,57 @@ body {
 
 /* ---------- Mise en page ---------- */
 
+/*
+ * Téléphone (< 900 px) : barre du haut compacte, un écran à la fois,
+ * onglets en bas. PC : menu latéral à gauche, l'écran à droite.
+ */
+:root {
+  --nav-h: 64px;
+  --marge: 10px;
+  --haut: env(safe-area-inset-top, 0px);
+  --bas: env(safe-area-inset-bottom, 0px);
+  --ressort: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --doux: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .barre {
   position: sticky;
-  top: calc(var(--gap) * 0.75);
-  z-index: 2;
+  top: calc(var(--marge) + var(--haut));
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--gap);
-  max-width: 760px;
-  margin: calc(var(--gap) * 0.75) auto 0;
-  padding: calc(var(--gap) * 0.75) var(--gap);
-  width: calc(100% - 2 * var(--gap) * 0.75);
+  gap: 8px;
+  max-width: 820px;
+  margin: calc(var(--marge) + var(--haut)) auto 0;
+  padding: 8px 8px 8px 16px;
+  width: calc(100% - 2 * var(--marge));
 }
 
 .barre-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex: 0 0 auto;
 }
 
-h1 {
+h1,
+.marque {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   background: linear-gradient(90deg, var(--accent), var(--accent-2));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+#titre-ecran {
+  animation: titre-entree 0.35s var(--doux);
 }
 
 h2 {
@@ -244,9 +267,9 @@ h2 {
 }
 
 main {
-  max-width: 760px;
+  max-width: 820px;
   margin: 0 auto;
-  padding: var(--gap);
+  padding: var(--gap) var(--marge) calc(var(--nav-h) + var(--bas) + 3 * var(--marge));
 }
 
 input,
@@ -294,9 +317,31 @@ select {
   cursor: pointer;
 }
 
+.who {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
 .who select {
   width: auto;
-  margin-left: 8px;
+  padding: 7px 28px 7px 12px;
+  border-radius: 999px;
+  color: var(--text);
+  background-position: right 10px center;
+}
+
+/* Sur un petit téléphone, « Je suis » laisse la place au titre. */
+@media (max-width: 420px) {
+  .who span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
 }
 
 form {
@@ -312,6 +357,11 @@ main > section {
   gap: calc(var(--gap) * 0.85);
   margin-bottom: var(--gap);
   padding: var(--gap);
+}
+
+/* Un seul écran à la fois (nav.js). */
+main > section[data-ecran]:not(.actif) {
+  display: none;
 }
 
 main > section > h2 {
@@ -1329,4 +1379,832 @@ input[type="color"] {
 .episode input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
+}
+
+/* ---------- Navigation ---------- */
+
+.nav {
+  position: fixed;
+  z-index: 5;
+  left: var(--marge);
+  right: var(--marge);
+  bottom: calc(var(--marge) + var(--bas));
+  height: var(--nav-h);
+  padding: 6px;
+  border-radius: calc(var(--radius) + 6px);
+  background-color: var(--glass-strong);
+}
+
+.nav .marque,
+.nav .secondaire {
+  display: none;
+}
+
+.nav-liens {
+  position: relative;
+  display: flex;
+  height: 100%;
+  gap: 2px;
+}
+
+.nav-liens a,
+.nav-plus {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 2px;
+  border: 0;
+  border-radius: calc(var(--radius) * 0.9);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color 0.25s ease,
+    transform 0.2s var(--ressort);
+}
+
+.nav-liens a span,
+.nav-plus span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-liens a:active,
+.nav-plus:active {
+  transform: scale(0.92);
+}
+
+.nav-liens a[aria-current="page"],
+.nav-plus.actif {
+  color: var(--accent-text);
+}
+
+.nav-plus[aria-expanded="true"]:not(.actif) {
+  color: var(--accent);
+}
+
+.nav-liens a[aria-current="page"] svg,
+.nav-plus.actif svg {
+  animation: icone-saut 0.45s var(--ressort);
+}
+
+/* Pastille qui glisse jusqu'à l'onglet actif (placée par nav.js). */
+.nav-indicateur {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  border-radius: calc(var(--radius) * 0.9);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 40%, transparent);
+  transition:
+    transform 0.45s var(--ressort),
+    width 0.45s var(--ressort),
+    height 0.45s var(--ressort),
+    opacity 0.2s ease;
+  pointer-events: none;
+}
+
+/* PC : menu latéral. */
+@media (min-width: 900px) {
+  body {
+    padding-left: calc(230px + 2 * var(--marge));
+  }
+
+  .nav {
+    top: var(--marge);
+    right: auto;
+    bottom: var(--marge);
+    width: 230px;
+    height: auto;
+    padding: 18px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .nav .marque {
+    display: block;
+    padding: 0 12px;
+    font-size: 1.35rem;
+  }
+
+  .nav .secondaire {
+    display: flex;
+  }
+
+  .nav-liens {
+    flex-direction: column;
+    height: auto;
+    gap: 4px;
+  }
+
+  .nav-liens a {
+    flex: 0 0 auto;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 10px 14px;
+    font-size: 0.95rem;
+  }
+
+  .nav-liens a:hover:not([aria-current="page"]) {
+    color: var(--text);
+    transform: translateX(3px);
+  }
+
+  .nav-plus {
+    display: none;
+  }
+
+  main {
+    padding-bottom: calc(var(--gap) * 2);
+  }
+}
+
+/* ---------- Feuille « Plus » (téléphone) ---------- */
+
+.feuille {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+}
+
+.feuille[hidden] {
+  display: none;
+}
+
+.feuille-fond {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 12, 25, 0.28);
+  animation: fondu 0.25s ease;
+}
+
+.feuille-corps {
+  position: absolute;
+  left: var(--marge);
+  right: var(--marge);
+  bottom: calc(var(--nav-h) + var(--bas) + 2 * var(--marge));
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 10px 14px 16px;
+  border: var(--border-width) solid var(--border-color);
+  border-radius: calc(var(--radius) + 6px);
+  background-color: var(--glass-solid);
+  box-shadow: var(--shadow);
+  animation: feuille-entree 0.4s var(--ressort);
+}
+
+.feuille-poignee {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--muted);
+  opacity: 0.5;
+}
+
+.tuiles {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.tuile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 4px;
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) * 0.8);
+  background: var(--field-bg);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+  animation: item-entree 0.4s var(--doux) both;
+}
+
+.tuile svg {
+  color: var(--accent);
+}
+
+.tuile:nth-child(2) {
+  animation-delay: 40ms;
+}
+
+.tuile:nth-child(3) {
+  animation-delay: 80ms;
+}
+
+.tuile:nth-child(4) {
+  animation-delay: 120ms;
+}
+
+.tuile:nth-child(5) {
+  animation-delay: 160ms;
+}
+
+@media (max-width: 380px) {
+  .tuiles {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ---------- Bouton « + » flottant (téléphone) ---------- */
+
+.fab {
+  position: fixed;
+  z-index: 4;
+  right: calc(var(--marge) + 6px);
+  bottom: calc(var(--nav-h) + var(--bas) + 2 * var(--marge) + 4px);
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--accent-text);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 45%, transparent);
+  animation: fab-entree 0.45s var(--ressort);
+}
+
+.fab[hidden] {
+  display: none;
+}
+
+/* Sur PC, chaque écran a son bouton d'ajout en haut. */
+@media (min-width: 900px) {
+  .fab {
+    display: none;
+  }
+}
+
+.fab:active {
+  transform: scale(0.9) rotate(90deg);
+}
+
+/* ---------- En-tête des écrans et formulaires repliables ---------- */
+
+.ecran-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ecran-tete h2 {
+  margin: 0;
+}
+
+button.ajouter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px 8px 12px;
+  white-space: nowrap;
+}
+
+button.ajouter svg {
+  transition: transform 0.3s var(--ressort);
+}
+
+button.ajouter[aria-expanded="true"] svg {
+  transform: rotate(45deg);
+}
+
+.repliable:not(.ouvert) {
+  display: none;
+}
+
+.repliable.ouvert {
+  padding: var(--gap);
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--field-bg);
+  transform-origin: top center;
+  animation: deplie 0.35s var(--doux);
+}
+
+.repliable .meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Le titre de l'écran est déjà dans la barre du haut : il reste pour les
+   lecteurs d'écran seulement. */
+main > section > h2,
+.ecran-tete h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.ecran-tete {
+  justify-content: flex-end;
+}
+
+/* Sur téléphone, le « + » flottant remplace le bouton d'ajout. */
+@media (max-width: 899px) {
+  .ecran-tete {
+    display: contents;
+  }
+
+  .ecran-tete .ajouter {
+    display: none;
+  }
+}
+
+/* ---------- Boutons en icône ---------- */
+
+button.icone.petite {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    transform 0.15s var(--ressort);
+}
+
+button.icone.petite:hover {
+  background: var(--field-bg);
+  color: var(--text);
+}
+
+button.icone.petite.danger:hover {
+  color: var(--danger);
+}
+
+.actions:has(> .icone.petite) {
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+
+/* ---------- Listes ---------- */
+
+.task,
+.date,
+.note,
+.file,
+.device {
+  transition:
+    transform 0.25s var(--doux),
+    box-shadow 0.25s ease;
+}
+
+@media (hover: hover) {
+  .task:hover,
+  .date:hover,
+  .note:hover,
+  .file:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(15, 20, 40, 0.08);
+  }
+}
+
+.task {
+  flex-wrap: nowrap;
+}
+
+.task .text {
+  flex: 1 1 auto;
+}
+
+/* Case ronde qui se remplit avec un petit rebond. */
+.task input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 2px solid color-mix(in srgb, var(--accent) 70%, var(--border-color));
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.task input[type="checkbox"]:checked {
+  border-color: transparent;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6L20.1 8.4 18.7 7Z' fill='white'/%3E%3C/svg%3E") center / 70% no-repeat,
+    linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+
+.task.vient-cocher input[type="checkbox"] {
+  animation: coche 0.45s var(--ressort);
+}
+
+.task.vient-cocher .title {
+  text-decoration: none;
+  background: linear-gradient(currentColor, currentColor) 0 55% / 100% 1.5px no-repeat;
+  animation: barre-titre 0.45s var(--doux);
+}
+
+.date {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "emoji text actions"
+    "emoji jours actions";
+  column-gap: 12px;
+  row-gap: 4px;
+}
+
+.date .emoji {
+  grid-area: emoji;
+}
+
+.date .text {
+  grid-area: text;
+}
+
+.date .jours {
+  grid-area: jours;
+  justify-self: start;
+  padding: 1px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--text);
+}
+
+.date .jours:empty {
+  display: none;
+}
+
+.date .actions {
+  grid-area: actions;
+  margin: 0;
+}
+
+.date.today {
+  animation: pulsation 2.4s ease-in-out infinite;
+}
+
+.date-next .compte {
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.note-tete {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.note-tete h3 {
+  margin: 6px 0 4px;
+  overflow-wrap: anywhere;
+}
+
+.file {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.file .actions {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.file img {
+  grid-column: 1 / -1;
+}
+
+/* ---------- Accueil ---------- */
+
+.accueil {
+  padding: 0;
+}
+
+.salut {
+  display: grid;
+  gap: 4px;
+  padding: calc(var(--gap) * 1.2) var(--gap);
+}
+
+.salut h2 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.salut .meta {
+  margin: 0;
+  color: var(--muted);
+}
+
+.pastille-etat {
+  justify-self: start;
+  margin: 6px 0 0;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: var(--field-bg);
+  color: var(--muted);
+}
+
+.pastille-etat::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  vertical-align: 1px;
+}
+
+.pastille-etat.ok::before {
+  background: #34c759;
+  animation: pulsation-point 2s ease-in-out infinite;
+}
+
+.pastille-etat[hidden] {
+  display: none;
+}
+
+.grille-accueil {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+}
+
+.carte {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  padding: var(--gap);
+  color: inherit;
+  text-decoration: none;
+  transition: transform 0.3s var(--ressort);
+}
+
+.carte[hidden] {
+  display: none;
+}
+
+a.carte:active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) {
+  a.carte:hover {
+    transform: translateY(-3px);
+  }
+}
+
+.carte-date,
+.carte-taches {
+  grid-column: 1 / -1;
+}
+
+.carte .etiquette {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.carte .title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.carte .meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.carte .emoji {
+  font-size: 1.5rem;
+}
+
+.carte .extrait {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.carte-date {
+  justify-items: center;
+  text-align: center;
+  padding: calc(var(--gap) * 1.4) var(--gap);
+}
+
+.carte-date .compte {
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.carte-tete {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.carte-tete h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.carte-tete a {
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+#accueil-taches {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+#accueil-taches .plus-de-taches {
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+#accueil-error {
+  margin: 0;
+  color: var(--danger);
+}
+
+/* ---------- Animations ---------- */
+
+/* Entrée d'un écran : il glisse du côté de l'onglet choisi. */
+main > section.entree {
+  animation: ecran-entree 0.42s var(--doux);
+}
+
+/* Puis ses éléments arrivent en cascade. */
+.entree li,
+.entree .carte,
+.entree .salut {
+  animation: item-entree 0.5s var(--doux) both;
+  animation-delay: calc(var(--i, 0) * 45ms + 60ms);
+}
+
+.entree .grille-accueil > :nth-child(2) {
+  animation-delay: 120ms;
+}
+
+.entree .grille-accueil > :nth-child(3) {
+  animation-delay: 180ms;
+}
+
+.entree .grille-accueil > :nth-child(4) {
+  animation-delay: 240ms;
+}
+
+.sortie {
+  animation: sortie 0.22s ease-in forwards;
+  pointer-events: none;
+}
+
+@keyframes ecran-entree {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--sens, 1) * 28px));
+  }
+}
+
+@keyframes item-entree {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+
+@keyframes sortie {
+  to {
+    opacity: 0;
+    transform: translateX(32px) scale(0.96);
+  }
+}
+
+@keyframes titre-entree {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes deplie {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+@keyframes fondu {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes feuille-entree {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.96);
+  }
+}
+
+@keyframes fab-entree {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-90deg);
+  }
+}
+
+@keyframes icone-saut {
+  40% {
+    transform: translateY(-4px) scale(1.12);
+  }
+}
+
+@keyframes coche {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.2);
+  }
+}
+
+@keyframes barre-titre {
+  from {
+    background-size: 0 1.5px;
+  }
+}
+
+@keyframes pulsation {
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+}
+
+@keyframes pulsation-point {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* Le téléphone demande moins d'animations : on les coupe toutes. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -21,7 +21,8 @@ const card = title => `[...document.querySelectorAll('#animes li')].find(li => l
 const inCard = (title, expr) => js(`(() => { const li = ${card(title)}; return li ? ${expr} : 'absent' })()`);
 
 console.log(await call("driver_session", { action: "start", host: "127.0.0.1", port: 9223 }));
-await js("(() => { document.querySelector('.animes').scrollIntoView(); return true })()");
+await js("(() => { location.hash = '#animes'; return true })()");
+await sleep(500);
 
 // Un animé « venu d'AniList » (ajouté par la commande, comme le ferait la recherche).
 const info = {

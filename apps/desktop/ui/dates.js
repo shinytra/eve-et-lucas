@@ -84,7 +84,8 @@
     form.reset();
     syncCountBox();
     saveButton.textContent = "Ajouter";
-    cancelButton.hidden = true;
+    showError(null);
+    window.__ui?.fermer(form);
   }
 
   function startEdit(item) {
@@ -106,7 +107,7 @@
     countBox.checked = item.year != null;
     syncCountBox();
     saveButton.textContent = "Enregistrer";
-    cancelButton.hidden = false;
+    window.__ui?.ouvrir(form);
     titleInput.focus();
   }
 
@@ -166,18 +167,18 @@
         jours.className = "jours";
         jours.textContent = item.days_left == null ? "" : countdown(item.days_left);
 
-        const edit = document.createElement("button");
-        edit.textContent = "Modifier";
+        const edit = window.__ui.iconButton("modifier", `Modifier « ${item.title} »`);
         edit.addEventListener("click", () => startEdit(item));
 
-        const del = document.createElement("button");
-        del.textContent = "Supprimer";
-        del.className = "danger";
+        const del = window.__ui.iconButton("supprimer", `Supprimer « ${item.title} »`, "danger");
         del.addEventListener("click", async () => {
           del.disabled = true;
+          await window.__ui.sortie(li);
           const ok = await run(() => invoke("delete_date", { id: item.id }));
-          if (!ok) del.disabled = false;
-          else if (editingId === item.id) resetForm();
+          if (!ok) {
+            del.disabled = false;
+            li.classList.remove("sortie");
+          } else if (editingId === item.id) resetForm();
         });
 
         const actions = document.createElement("div");

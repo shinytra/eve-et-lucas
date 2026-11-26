@@ -1,6 +1,6 @@
 [package]
 name = "eve-et-lucas-desktop"
-version = "0.1.0"
+version = "0.2.0"
 publish = false
 description = "Appli PC Eve & Lucas (Tauri 2). Pensée dès le départ pour Android."
 edition.workspace = true

@@ -18,11 +18,15 @@ function check(label, cond) { console.log(`${cond ? "✓" : "✗"} ${label}`); i
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 console.log(await call("driver_session", { action: "start", host: "127.0.0.1", port: 9223 }));
+// Un écran à la fois : on va sur celui des dates.
+await js("(() => { location.hash = '#dates'; return true })()");
+await sleep(500);
 const count = async () => Number((await js("(() => document.querySelectorAll('#dates li').length)()")).match(/\d+/)?.[0] ?? -1);
 const n0 = await count();
 const target = (name) => `[...document.querySelectorAll('#dates li')].find(li => li.querySelector('.title').textContent === ${JSON.stringify(name)})`;
 
 // Date qui tombe aujourd'hui, il y a 3 ans : « Aujourd'hui », « 3 ans ».
+await js("(() => { const f = document.getElementById('date-form'); if (!f.classList.contains('ouvert')) document.querySelector('.ajouter[data-form=date-form]').click(); return true })()");
 await call("webview_keyboard", { action: "type", selector: "#date-title", text: "Notre anniversaire MCP" });
 await js(`(() => {
   const d = new Date(), p = n => String(n).padStart(2, '0');
@@ -37,6 +41,7 @@ check("compte à rebours « Aujourd'hui » et « 3 ans »", /Aujourd'hui/.test(m
 check("encart de la prochaine date", /Aujourd'hui !/.test(await js("(() => document.getElementById('date-next').textContent)()")));
 
 // Date unique dans 10 jours, sans compter les années.
+await js("(() => { const f = document.getElementById('date-form'); if (!f.classList.contains('ouvert')) document.querySelector('.ajouter[data-form=date-form]').click(); return true })()");
 await call("webview_keyboard", { action: "type", selector: "#date-title", text: "Concert MCP" });
 await js(`(() => {
   const d = new Date(Date.now() + 10 * 86400000), p = n => String(n).padStart(2, '0');
@@ -55,6 +60,7 @@ check("la commande list_dates renvoie les dates", ipc.includes("Concert MCP") &&
 await call("webview_screenshot", { format: "png", filePath: out });
 
 // Sans date : message d'erreur.
+await js("(() => { const f = document.getElementById('date-form'); if (!f.classList.contains('ouvert')) document.querySelector('.ajouter[data-form=date-form]').click(); return true })()");
 await call("webview_keyboard", { action: "type", selector: "#date-title", text: "Sans date" });
 await call("webview_interact", { action: "click", selector: "#date-save" });
 await sleep(500);

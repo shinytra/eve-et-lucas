@@ -19,11 +19,55 @@
       <div class="fond-grain"></div>
     </div>
 
+    <!-- Navigation : barre d'onglets en bas sur téléphone, menu latéral sur PC (nav.js). -->
+    <nav id="nav" class="nav verre" aria-label="Écrans">
+      <p class="marque">Eve &amp; Lucas</p>
+      <div class="nav-liens">
+        <span class="nav-indicateur" aria-hidden="true"></span>
+        <a href="#accueil" data-ecran="accueil">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 3 3 10.2V21h6.5v-6h5v6H21V10.2Z" /></svg>
+          <span>Accueil</span>
+        </a>
+        <a href="#taches" data-ecran="taches">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm5.6 13.4 7.1-7.1-1.4-1.4-5.7 5.7-2.8-2.8-1.4 1.4Z" /></svg>
+          <span>Tâches</span>
+        </a>
+        <a href="#dates" data-ecran="dates">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M7 2h2v2h6V2h2v2h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2Zm-2 7v11h14V9Zm7 9.2-3.2-3a1.9 1.9 0 0 1 2.7-2.7l.5.5.5-.5a1.9 1.9 0 0 1 2.7 2.7Z" /></svg>
+          <span>Dates</span>
+        </a>
+        <a href="#notes" data-ecran="notes">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M5 2h10l5 5v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm9 1.8V8h4.2ZM7 12v2h10v-2Zm0 4v2h7v-2Z" /></svg>
+          <span>Notes</span>
+        </a>
+        <a href="#animes" data-ecran="animes" class="secondaire">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm6 3.5v7l6-3.5Z" /></svg>
+          <span>Animés</span>
+        </a>
+        <a href="#fichiers" data-ecran="fichiers" class="secondaire">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
+          <span>Fichiers</span>
+        </a>
+        <a href="#maison" data-ecran="maison" class="secondaire">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.6A2.6 2.6 0 1 1 12 6.4a2.6 2.6 0 0 1 0 5.2Z" /></svg>
+          <span>Arrivée</span>
+        </a>
+        <a href="#appareils" data-ecran="appareils" class="secondaire">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm0 3v13h8V5Z" /></svg>
+          <span>Appareils</span>
+        </a>
+        <button type="button" id="nav-plus" class="nav-plus" aria-expanded="false" aria-controls="plus">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M4 4h7v7H4Zm9 0h7v7h-7ZM4 13h7v7H4Zm9 0h7v7h-7Z" /></svg>
+          <span>Plus</span>
+        </button>
+      </div>
+    </nav>
+
     <header class="verre barre">
-      <h1>Eve &amp; Lucas</h1>
+      <h1 id="titre-ecran">Eve &amp; Lucas</h1>
       <div class="barre-actions">
         <label class="who">
-          Je suis
+          <span>Je suis</span>
           <select id="author">
             <option>Lucas</option>
             <option>Eve</option>
@@ -38,20 +82,44 @@
           aria-expanded="false"
           aria-controls="settings"
         >
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-            <path
-              fill="currentColor"
-              d="M12 3a9 9 0 0 0 0 18c1.1 0 1.8-.8 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8h2.1A4.3 4.3 0 0 0 21 10.7C21 6.4 17 3 12 3Zm-5.5 9a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z"
-            />
-          </svg>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 0 0 0 18c1.1 0 1.8-.8 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8h2.1A4.3 4.3 0 0 0 21 10.7C21 6.4 17 3 12 3Zm-5.5 9a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" /></svg>
         </button>
       </div>
     </header>
 
     <main>
-      <section aria-labelledby="tasks-title" class="tasks verre">
-        <h2 id="tasks-title">Tâches</h2>
-        <form id="task-form" autocomplete="off" novalidate>
+      <!-- Accueil : résumé du jour (accueil.js). -->
+      <section id="ecran-accueil" data-ecran="accueil" class="accueil" aria-labelledby="accueil-title">
+        <div class="salut verre">
+          <h2 id="accueil-title">Bonjour</h2>
+          <p id="accueil-jour" class="meta"></p>
+          <p id="accueil-synchro" class="pastille-etat" hidden></p>
+        </div>
+        <div class="grille-accueil">
+          <a href="#dates" id="accueil-date" class="carte verre carte-date" hidden></a>
+          <div class="carte verre carte-taches">
+            <div class="carte-tete">
+              <h3>À faire</h3>
+              <a href="#taches">Tout voir</a>
+            </div>
+            <ul id="accueil-taches"></ul>
+            <p id="accueil-taches-vide" class="meta" hidden>Rien à faire pour l'instant 🎉</p>
+          </div>
+          <a href="#maison" id="accueil-arrivee" class="carte verre carte-petite" hidden></a>
+          <a href="#notes" id="accueil-note" class="carte verre carte-petite" hidden></a>
+        </div>
+        <p id="accueil-error" role="alert" hidden></p>
+      </section>
+
+      <section id="ecran-taches" data-ecran="taches" aria-labelledby="tasks-title" class="tasks verre">
+        <div class="ecran-tete">
+          <h2 id="tasks-title">Tâches</h2>
+          <button type="button" class="ajouter principal" data-form="task-form" aria-expanded="false" aria-controls="task-form">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6Z" /></svg>
+            <span>Nouvelle tâche</span>
+          </button>
+        </div>
+        <form id="task-form" class="repliable" autocomplete="off" novalidate>
           <input id="task-title" placeholder="Nouvelle tâche" maxlength="200" aria-label="Tâche" />
           <div class="fields">
             <label>
@@ -68,7 +136,7 @@
             </label>
           </div>
           <div class="actions">
-            <button type="button" id="task-cancel" hidden>Annuler</button>
+            <button type="button" id="task-cancel">Annuler</button>
             <button type="submit" id="task-save">Ajouter</button>
           </div>
           <p id="task-error" role="alert" hidden></p>
@@ -77,7 +145,7 @@
         <ul id="tasks"></ul>
       </section>
 
-      <section aria-labelledby="animes-title" class="animes verre">
+      <section id="ecran-animes" data-ecran="animes" aria-labelledby="animes-title" class="animes verre">
         <h2 id="animes-title">Animés</h2>
         <form id="anime-search" class="ligne" autocomplete="off" novalidate role="search">
           <input id="anime-query" type="search" placeholder="Chercher un animé à ajouter" maxlength="100" aria-label="Titre de l'animé" />
@@ -98,10 +166,16 @@
         <ul id="animes"></ul>
       </section>
 
-      <section aria-labelledby="dates-title" class="dates verre">
-        <h2 id="dates-title">Dates importantes</h2>
+      <section id="ecran-dates" data-ecran="dates" aria-labelledby="dates-title" class="dates verre">
+        <div class="ecran-tete">
+          <h2 id="dates-title">Dates importantes</h2>
+          <button type="button" class="ajouter principal" data-form="date-form" aria-expanded="false" aria-controls="date-form">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6Z" /></svg>
+            <span>Nouvelle date</span>
+          </button>
+        </div>
         <div id="date-next" class="date-next" hidden></div>
-        <form id="date-form" autocomplete="off" novalidate>
+        <form id="date-form" class="repliable" autocomplete="off" novalidate>
           <input id="date-title" placeholder="Nom (ex. : Notre anniversaire)" maxlength="100" aria-label="Nom de la date" />
           <div class="fields">
             <label>
@@ -138,23 +212,29 @@
             Compter les années depuis cette date
           </label>
           <div class="actions">
-            <button type="button" id="date-cancel" hidden>Annuler</button>
+            <button type="button" id="date-cancel">Annuler</button>
             <button type="submit" id="date-save">Ajouter</button>
           </div>
+          <p class="meta">Les rappels s'affichent à 9 h sur chaque appareil, et le jour même.</p>
           <p id="date-error" role="alert" hidden></p>
         </form>
-        <p class="meta">Les rappels s'affichent à 9 h sur chaque appareil, et le jour même.</p>
         <p id="dates-empty" class="meta" hidden>Aucune date pour l'instant.</p>
         <ul id="dates"></ul>
       </section>
 
-      <section aria-labelledby="notes-title" class="notes verre">
-        <h2 id="notes-title">Notes partagées</h2>
-        <form id="note-form" autocomplete="off" novalidate>
+      <section id="ecran-notes" data-ecran="notes" aria-labelledby="notes-title" class="notes verre">
+        <div class="ecran-tete">
+          <h2 id="notes-title">Notes partagées</h2>
+          <button type="button" class="ajouter principal" data-form="note-form" aria-expanded="false" aria-controls="note-form">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6Z" /></svg>
+            <span>Nouvelle note</span>
+          </button>
+        </div>
+        <form id="note-form" class="repliable" autocomplete="off" novalidate>
           <input id="title" placeholder="Titre" maxlength="200" />
           <textarea id="body" placeholder="Écris une note…" rows="4"></textarea>
           <div class="actions">
-            <button type="button" id="cancel" hidden>Annuler</button>
+            <button type="button" id="cancel">Annuler</button>
             <button type="submit" id="save">Ajouter</button>
           </div>
           <p id="error" role="alert" hidden></p>
@@ -163,7 +243,7 @@
         <ul id="notes"></ul>
       </section>
 
-      <section aria-labelledby="home-title" class="home verre">
+      <section id="ecran-maison" data-ecran="maison" aria-labelledby="home-title" class="home verre">
         <h2 id="home-title">Arrivée à la maison</h2>
         <p class="meta">Quand l'un de vous approche de la maison, son téléphone prévient les autres appareils, qui sonnent. Pour qu'ils sonnent même appli fermée, installe l'appli ntfy (Play Store ou F-Droid) sur chaque téléphone : le message passe par ntfy.sh, chiffré, et le PC l'écoute aussi.</p>
         <div id="home-phone" hidden>
@@ -189,11 +269,14 @@
         <ul id="arrivals"></ul>
       </section>
 
-      <section aria-labelledby="files-title" class="files verre">
-        <h2 id="files-title">Fichiers partagés</h2>
-        <div class="actions">
+      <section id="ecran-fichiers" data-ecran="fichiers" aria-labelledby="files-title" class="files verre">
+        <div class="ecran-tete">
+          <h2 id="files-title">Fichiers partagés</h2>
           <input id="file-input" type="file" multiple hidden />
-          <button type="button" id="file-share">Partager un fichier</button>
+          <button type="button" id="file-share" class="ajouter principal">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6Z" /></svg>
+            <span>Partager un fichier</span>
+          </button>
         </div>
         <p id="file-status" class="meta" hidden></p>
         <p id="file-error" role="alert" hidden></p>
@@ -201,7 +284,7 @@
         <ul id="files"></ul>
       </section>
 
-      <section aria-labelledby="devices-title" class="devices verre">
+      <section id="ecran-appareils" data-ecran="appareils" aria-labelledby="devices-title" class="devices verre">
         <h2 id="devices-title">Appareils</h2>
         <p id="sync-status" class="meta">Synchro en cours de démarrage…</p>
         <ul id="devices"></ul>
@@ -239,6 +322,41 @@
         <p id="devices-error" role="alert" hidden></p>
       </section>
     </main>
+
+    <!-- Feuille « Plus » du téléphone : les écrans qui n'ont pas d'onglet. -->
+    <div id="plus" class="feuille" hidden>
+      <div class="feuille-fond"></div>
+      <div class="feuille-corps" role="dialog" aria-label="Plus d'écrans">
+        <span class="feuille-poignee" aria-hidden="true"></span>
+        <div class="tuiles">
+          <a href="#animes" class="tuile">
+            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm6 3.5v7l6-3.5Z" /></svg>
+            <span>Animés</span>
+          </a>
+          <a href="#fichiers" class="tuile">
+            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
+            <span>Fichiers</span>
+          </a>
+          <a href="#maison" class="tuile">
+            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.6A2.6 2.6 0 1 1 12 6.4a2.6 2.6 0 0 1 0 5.2Z" /></svg>
+            <span>Arrivée</span>
+          </a>
+          <a href="#appareils" class="tuile">
+            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm0 3v13h8V5Z" /></svg>
+            <span>Appareils</span>
+          </a>
+          <button type="button" id="plus-apparence" class="tuile">
+            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 0 0 0 18c1.1 0 1.8-.8 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8h2.1A4.3 4.3 0 0 0 21 10.7C21 6.4 17 3 12 3Zm-5.5 9a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" /></svg>
+            <span>Apparence</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bouton « + » flottant du téléphone : ajoute sur l'écran affiché. -->
+    <button type="button" id="fab" class="fab" aria-label="Ajouter" hidden>
+      <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6Z" /></svg>
+    </button>
 
     <!-- Écran des réglages d'apparence (rempli par appearance.js). -->
     <aside id="settings" class="verre panneau" role="dialog" aria-labelledby="settings-title" hidden>
@@ -297,6 +415,7 @@
       </div>
     </aside>
 
+    <script src="nav.js"></script>
     <script src="main.js"></script>
     <script src="tasks.js"></script>
     <script src="animes.js"></script>
@@ -304,5 +423,6 @@
     <script src="files.js"></script>
     <script src="arrivals.js"></script>
     <script src="devices.js"></script>
+    <script src="accueil.js"></script>
   </body>
 </html>

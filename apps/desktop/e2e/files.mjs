@@ -19,6 +19,9 @@ function check(label, cond) { console.log(`${cond ? "✓" : "✗"} ${label}`); i
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 console.log(await call("driver_session", { action: "start", host: "127.0.0.1", port: 9223 }));
+// Un écran à la fois : on va sur celui des fichiers.
+await js("(() => { location.hash = '#fichiers'; return true })()");
+await sleep(500);
 const count = async () => Number((await js("(() => document.querySelectorAll('#files li').length)()")).match(/\d+/)?.[0] ?? -1);
 const n0 = await count();
 

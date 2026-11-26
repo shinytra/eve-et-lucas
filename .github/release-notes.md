@@ -4,4 +4,4 @@
 
 **Téléphone Android** : sur le téléphone, télécharger `Eve-et-Lucas-…-Android.apk`, l'ouvrir et autoriser l'installation depuis le navigateur (ou l'appli Fichiers). Installer aussi l'appli **ntfy** (Play Store ou F-Droid) pour la sonnerie à l'arrivée. Pour téléphones ARM 64 bits (presque tous les téléphones récents). Les versions suivantes s'installent par-dessus, sans désinstaller ; seul le passage depuis l'ancien APK de test demande de le désinstaller une fois.
 
-**Appairer** : sur le PC, écran « Appareils », puis « Appairer un appareil » ; sur le téléphone, « Scanner le QR code ».
+**Appairer** : sur le PC, menu « Appareils » à gauche, puis « Appairer un appareil » ; sur le téléphone, onglet « Plus » en bas, puis « Appareils » et « Scanner le QR code ».
