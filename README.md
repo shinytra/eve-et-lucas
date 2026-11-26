@@ -8,6 +8,8 @@ Appli pour notre couple, sur PC et Android : notes partagées, tâches communes 
 
 L'appli PC gère des notes partagées enregistrées en local et tourne en tâche de fond : fermer la fenêtre la cache, l'icône dans la barre des tâches permet de la rouvrir ou de la quitter, et son menu propose « Lancer au démarrage de l'ordinateur ».
 
+La partie « Tâches » permet de noter ce qu'il y a à faire, pour l'un, l'autre ou les deux, avec un rappel à une date et une heure. À l'échéance, une notification s'affiche sur chaque appareil : sur téléphone elle reste affichée jusqu'à ce que la tâche soit cochée, sur PC elle revient toutes les heures.
+
 Les appareils se synchronisent entre eux : dans la partie « Appareils », « Appairer un appareil » affiche un QR code (valable 10 minutes, une seule fois) à scanner ou à coller dans « Rejoindre avec un code » sur l'autre appareil. Ensuite, chaque modification est envoyée aux autres appareils joignables, et une synchro a lieu au moins toutes les minutes. La feuille de route complète est dans [CLAUDE.md](CLAUDE.md).
 
 ## Lancer l'appli PC

@@ -6,7 +6,7 @@ Appli de couple pour Eve et Lucas, en Rust, pour Android et PC. Lucas valide cha
 
 - **Tauri 2** : un seul code pour PC (Windows/Linux) et Android. Interface web dans `apps/desktop/ui/` (HTML/CSS/JS sans étape de build pour l'instant), cœur en Rust.
 - **`crates/couple-core`** : toutes les données et règles métier. Ne dépend ni de Tauri ni du réseau. Chaque fonctionnalité a son propre document **Automerge** (notes, tâches, widgets…), dont la racine est une table `id -> élément` avec des identifiants UUID v4. Ainsi deux appareils qui n'ont jamais communiqué peuvent fusionner sans rien perdre (voir `notes.rs`).
-- **`apps/desktop/src-tauri`** : plomberie uniquement (`store.rs` : documents sur disque et trait `Store` ; `sync.rs` : nœud iroh en tâche de fond, commandes d'appairage). Ce qui est propre au PC (icône, lancement au démarrage, instance unique) est dans `src/desktop.rs`, compilé seulement avec `#[cfg(desktop)]` ; les plugins correspondants sont des dépendances réservées au PC dans `Cargo.toml`. Commandes Tauri qui appellent le cœur, enregistrement des documents dans le dossier de données de l'appli (écriture atomique : fichier temporaire puis renommage).
+- **`apps/desktop/src-tauri`** : plomberie uniquement (`store.rs` : documents sur disque et trait `Store` ; `sync.rs` : nœud iroh en tâche de fond, commandes d'appairage ; `reminders.rs` : notifications des tâches échues via `tauri-plugin-notification`, permanentes sur téléphone et confiées à Android à l'avance, répétées toutes les heures sur PC). Ce qui est propre au PC (icône, lancement au démarrage, instance unique) est dans `src/desktop.rs`, compilé seulement avec `#[cfg(desktop)]` ; les plugins correspondants sont des dépendances réservées au PC dans `Cargo.toml`. Commandes Tauri qui appellent le cœur, enregistrement des documents dans le dossier de données de l'appli (écriture atomique : fichier temporaire puis renommage).
 - **`crates/couple-sync`** : synchro P2P avec iroh entre les trois pairs (téléphone de Lucas, téléphone d'Eve, PC). Le PC, allumé environ 95 % du temps, est le pair « boîte aux lettres » qui garde une copie de tout. PC éteint : les téléphones se synchronisent directement entre eux.
   - Identité d'un appareil = sa clé iroh (`device.key` dans le dossier de données). La liste des appareils autorisés est elle-même un document Automerge synchronisé (`DevicesDoc`) : un appareil appairé avec le PC est appris par les autres.
   - Appairage (ALPN `eve-et-lucas/pair/1`) : code `EL1:…` (QR code) à usage unique, valable 10 min, contenant l'adresse de l'hôte et un secret. Synchro (ALPN `eve-et-lucas/sync/1`) : refusée à tout appareil absent de `DevicesDoc`, un flux par document, protocole de synchro d'Automerge.
@@ -23,7 +23,7 @@ cargo test --workspace                  # tests du cœur
 cargo run -p eve-et-lucas-desktop       # lance l'appli PC
 cargo run -p eve-et-lucas-desktop --features mcp-bridge   # idem, pilotable par le serveur MCP Tauri
 cargo tauri dev --features mcp-bridge   # idem, avec la CLI Tauri (cargo install tauri-cli --version "^2")
-cd apps/desktop/e2e && npm install && npm test   # test de bout en bout via le MCP Tauri (appli lancée avec --features mcp-bridge)
+cd apps/desktop/e2e && npm install && npm test   # notes + tâches de bout en bout via le MCP Tauri (appli lancée avec --features mcp-bridge)
 cargo build -p couple-sync --example peer && (cd apps/desktop/e2e && node pairing.mjs)   # appairage + synchro avec un faux téléphone
 EVE_ET_LUCAS_DATA_DIR=/tmp/essai cargo run -p eve-et-lucas-desktop   # appli avec un autre dossier de données
 cd apps/desktop/src-tauri && npm ci && npm run tauri -- android init   # (ou cargo tauri android init) génère gen/android (non versionné), besoin du SDK + NDK (NDK_HOME)
@@ -41,6 +41,8 @@ Sous Linux, Tauri a besoin de `libwebkit2gtk-4.1-dev libayatana-appindicator3-de
 - Une entrée illisible venue d'un autre appareil est ignorée, jamais bloquante. Un fichier local illisible est mis de côté (`.corrompu-<date>`) avec un avertissement, sans empêcher l'appli de démarrer.
 - Une modification se fait sur une copie du document, enregistrée (avec `sync_all`) avant de remplacer celle en mémoire.
 - Les dates sont des millisecondes Unix (`i64`) passées en paramètre au cœur, pour des tests déterministes.
+- Formulaires de l'interface en `novalidate` : la validation native de WebKitGTK peut bloquer l'envoi sans message (vu avec `datetime-local`). Les règles sont vérifiées dans le cœur.
+- Les fichiers `ui/` sont intégrés au binaire à la compilation : recompiler avant un test de bout en bout.
 - CSP : `csp` (versions distribuées) reste stricte. `devCsp` autorise `unsafe-inline`/`unsafe-eval` uniquement pour que le pont MCP injecte ses scripts en développement. Jamais de script inline dans `ui/`.
 - L'interface doit rester utilisable à 360 px de large (elle servira telle quelle sur Android).
 - Code réservé au téléphone : `#[cfg(mobile)]` côté Rust, dépendance sous `[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]`, permissions dans `capabilities/mobile.json`. Le réseau de ce conteneur bloque le SDK Android : l'APK est construit et vérifié par la CI.
@@ -74,7 +76,7 @@ Plutôt que de réécrire, s'inspirer de (ou dépendre de) :
 2. a. ✅ Appli PC en tâche de fond : icône dans la barre des tâches, fermer la fenêtre la cache, lancement au démarrage (option du menu de l'icône, démarre fenêtre cachée), une seule instance.
    b. ✅ Synchro iroh entre appareils + appairage par QR code (écran « Appareils »).
 3. ✅ Appli Android avec la même base (APK construit par la CI, scan du QR code d'appairage ; reste à essayer sur vos téléphones).
-4. Tâches communes et rappels (notifications).
+4. ✅ Tâches communes et rappels (notifications).
 5. Partage de fichiers P2P (iroh-blobs).
 6. Sonnerie à l'arrivée (géofencing, plugin Kotlin).
 7. Widgets interactifs partagés (Glance, plugin Kotlin), réveil par ntfy.
