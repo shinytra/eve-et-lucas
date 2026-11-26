@@ -22,6 +22,7 @@ mod reminders;
 mod store;
 mod sync;
 mod tasks;
+mod widget;
 
 use store::AppState;
 
@@ -123,7 +124,8 @@ pub fn run() {
     {
         builder = builder
             .plugin(tauri_plugin_barcode_scanner::init())
-            .plugin(tauri_plugin_geofence::init());
+            .plugin(tauri_plugin_geofence::init())
+            .plugin(tauri_plugin_home_widget::init());
     }
 
     // Uniquement avec `--features mcp-bridge` (jamais dans une version
@@ -154,7 +156,8 @@ pub fn run() {
             app.manage(state.clone());
             sync::start(app.handle(), state.clone());
             reminders::start(app.handle(), state.clone());
-            arrivals::start(app.handle(), state);
+            arrivals::start(app.handle(), state.clone());
+            widget::start(app.handle(), state);
             #[cfg(desktop)]
             desktop::setup(app)?;
             Ok(())

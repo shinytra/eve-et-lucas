@@ -5,6 +5,7 @@ members = [
   "crates/couple-sync",
   "apps/desktop/src-tauri",
   "plugins/tauri-plugin-geofence",
+  "plugins/tauri-plugin-home-widget",
 ]
 
 [workspace.package]

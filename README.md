@@ -14,6 +14,8 @@ La partie « Fichiers partagés » envoie des fichiers (500 Mo au plus) directem
 
 La partie « Arrivée à la maison » (sur téléphone) : choisir à qui est le téléphone, puis, une fois chez soi, appuyer sur « Je suis à la maison : enregistrer ici » et accepter la position « Toujours autoriser ». Ensuite, dès que le téléphone entre dans un rayon de 150 m autour de la maison, même appli fermée, les autres appareils sonnent « Eve arrive à la maison » (ou Lucas). Pour l'instant, un appareil sonne seulement si l'appli y tourne (PC en tâche de fond, téléphone en arrière-plan) ; sinon il le signale à sa prochaine ouverture, dans les 15 minutes.
 
+Sur téléphone, un widget « Eve & Lucas » peut être posé sur l'écran d'accueil (appui long sur l'écran, puis Widgets) : il montre les tâches à faire et la dernière arrivée à la maison. Cocher une tâche sur le widget fonctionne même appli fermée ; c'est enregistré à la prochaine ouverture de l'appli.
+
 Les appareils se synchronisent entre eux : dans la partie « Appareils », « Appairer un appareil » affiche un QR code (valable 10 minutes, une seule fois) à scanner ou à coller dans « Rejoindre avec un code » sur l'autre appareil. Ensuite, chaque modification est envoyée aux autres appareils joignables, et une synchro a lieu au moins toutes les minutes. La feuille de route complète est dans [CLAUDE.md](CLAUDE.md).
 
 ## Lancer l'appli PC

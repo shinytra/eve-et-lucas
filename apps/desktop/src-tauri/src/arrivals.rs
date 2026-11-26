@@ -41,7 +41,7 @@ fn settings_path(state: &AppState) -> PathBuf {
 
 /// Lit les réglages. Un fichier illisible est mis de côté avec un
 /// avertissement, et l'appli repart de réglages vides.
-fn load_settings(state: &AppState) -> ArrivalSettings {
+pub(crate) fn load_settings(state: &AppState) -> ArrivalSettings {
     let path = settings_path(state);
     let bytes = match std::fs::read(&path) {
         Ok(bytes) => bytes,

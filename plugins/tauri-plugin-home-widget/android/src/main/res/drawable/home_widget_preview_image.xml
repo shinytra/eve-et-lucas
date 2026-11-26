@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Aperçu simplifié (Android 11 et moins) : un cadre arrondi, un titre et
+     deux tâches avec leur case. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="250dp"
+    android:height="110dp"
+    android:viewportWidth="250"
+    android:viewportHeight="110">
+    <path
+        android:fillColor="@color/home_widget_background"
+        android:pathData="M20,0h210a20,20 0,0 1,20 20v70a20,20 0,0 1,-20 20h-210a20,20 0,0 1,-20 -20v-70a20,20 0,0 1,20 -20z" />
+    <path
+        android:fillColor="@color/home_widget_accent"
+        android:pathData="M16,14h90v10h-90z" />
+    <path
+        android:fillColor="@color/home_widget_text_secondary"
+        android:pathData="M16,32h130v6h-130z" />
+    <path
+        android:strokeColor="@color/home_widget_text_secondary"
+        android:strokeWidth="2"
+        android:fillColor="#00000000"
+        android:pathData="M17,51h14v14h-14z" />
+    <path
+        android:fillColor="@color/home_widget_text_primary"
+        android:pathData="M40,53h120v8h-120z" />
+    <path
+        android:strokeColor="@color/home_widget_text_secondary"
+        android:strokeWidth="2"
+        android:fillColor="#00000000"
+        android:pathData="M17,79h14v14h-14z" />
+    <path
+        android:fillColor="@color/home_widget_text_primary"
+        android:pathData="M40,81h100v8h-100z" />
+</vector>

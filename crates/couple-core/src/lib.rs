@@ -10,6 +10,7 @@ pub mod files;
 pub mod notes;
 pub mod sync;
 pub mod tasks;
+pub mod widget;
 
 pub use arrivals::{Arrival, ArrivalsDoc};
 pub use devices::{Device, DevicesDoc};
@@ -17,6 +18,7 @@ pub use files::{FilesDoc, SharedFile};
 pub use notes::{Note, NotesDoc};
 pub use sync::{SyncState, Syncable};
 pub use tasks::{Task, TasksDoc};
+pub use widget::{WidgetAction, WidgetData};
 
 /// Erreurs du cœur.
 #[derive(Debug, thiserror::Error)]

@@ -924,6 +924,7 @@ dependencies = [
  "automerge",
  "autosurgeon",
  "serde",
+ "serde_json",
  "thiserror 2.0.21",
  "uuid",
 ]
@@ -1546,6 +1547,7 @@ dependencies = [
  "tauri-plugin-autostart",
  "tauri-plugin-barcode-scanner",
  "tauri-plugin-geofence",
+ "tauri-plugin-home-widget",
  "tauri-plugin-mcp-bridge",
  "tauri-plugin-notification",
  "tauri-plugin-single-instance",
@@ -6342,6 +6344,17 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-geofence"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "tauri-plugin-home-widget"
 version = "0.1.0"
 dependencies = [
  "serde",

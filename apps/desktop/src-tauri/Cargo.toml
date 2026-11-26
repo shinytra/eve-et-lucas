@@ -27,6 +27,8 @@ tauri = { version = "2.12", features = ["tray-icon"] }
 tauri-plugin-notification = "2.8"
 # Arrivée à la maison (géofencing Android) ; sur PC, chaque appel renvoie une erreur.
 tauri-plugin-geofence = { path = "../../../plugins/tauri-plugin-geofence" }
+# Widget d'écran d'accueil (Android) ; sur PC, chaque appel est sans effet.
+tauri-plugin-home-widget = { path = "../../../plugins/tauri-plugin-home-widget" }
 # Pont pour le serveur MCP Tauri (Claude Code voit et pilote l'appli).
 # Seulement avec `--features mcp-bridge`, jamais dans une version distribuée.
 tauri-plugin-mcp-bridge = { version = "=0.13.2", optional = true }

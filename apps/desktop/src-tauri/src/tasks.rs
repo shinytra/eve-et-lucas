@@ -7,10 +7,11 @@ use tauri::State;
 
 use crate::{now_ms, store::AppState};
 
-/// Prévient la synchro et les rappels qu'une tâche a changé.
+/// Prévient la synchro, les rappels et le widget qu'une tâche a changé.
 fn changed(state: &AppState) {
     state.sync_wanted.notify_one();
     state.reminders_wanted.notify_one();
+    state.widget_wanted.notify_one();
 }
 
 #[tauri::command]
