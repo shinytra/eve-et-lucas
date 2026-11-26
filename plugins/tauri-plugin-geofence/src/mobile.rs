@@ -54,17 +54,74 @@ impl<R: Runtime> Geofence<R> {
 
     /// Arrivées notées par Android et pas encore confirmées avec
     /// [`Geofence::ack_arrivals`].
-    pub fn peek_arrivals(&self) -> Result<Vec<i64>> {
+    pub fn peek_arrivals(&self) -> Result<Vec<PendingArrival>> {
         self.0
             .run_mobile_plugin::<Arrivals>("peekArrivals", ())
             .map(|a| a.arrivals)
             .map_err(Into::into)
     }
 
-    /// Efface les arrivées jusqu'à `up_to` inclus, une fois enregistrées.
-    pub fn ack_arrivals(&self, up_to: i64) -> Result<()> {
+    /// Efface ces arrivées, une fois enregistrées dans le document partagé.
+    pub fn ack_arrivals(&self, ids: Vec<String>) -> Result<()> {
         self.0
-            .run_mobile_plugin("ackArrivals", AckArgs { up_to })
+            .run_mobile_plugin("ackArrivals", IdsArgs { ids })
+            .map_err(Into::into)
+    }
+
+    /// Réglages du réveil par ntfy (clé vide : pas d'envoi).
+    pub fn set_push_config(&self, config: PushConfig) -> Result<()> {
+        self.0
+            .run_mobile_plugin("setPushConfig", config)
+            .map_err(Into::into)
+    }
+
+    /// S'enregistre auprès du distributeur UnifiedPush (l'appli ntfy), s'il y
+    /// en a un. L'adresse arrive ensuite par [`Geofence::on_push_endpoint`].
+    pub fn register_push(&self) -> Result<PushStatus> {
+        self.0
+            .run_mobile_plugin("registerPush", ())
+            .map_err(Into::into)
+    }
+
+    /// Prévient quand le distributeur donne (ou change) l'adresse ntfy de ce
+    /// téléphone.
+    pub fn on_push_endpoint<F: Fn(String) + Send + Sync + 'static>(
+        &self,
+        handler: F,
+    ) -> Result<()> {
+        self.listen("pushEndpoint", move |e: PushEndpointEvent| {
+            handler(e.endpoint)
+        })
+    }
+
+    /// Arrivées des autres reçues par ntfy, pas encore confirmées avec
+    /// [`Geofence::ack_received`].
+    pub fn peek_received(&self) -> Result<Vec<ReceivedArrival>> {
+        self.0
+            .run_mobile_plugin::<Received>("peekReceived", ())
+            .map(|r| r.received)
+            .map_err(Into::into)
+    }
+
+    pub fn ack_received(&self, ids: Vec<String>) -> Result<()> {
+        self.0
+            .run_mobile_plugin("ackReceived", IdsArgs { ids })
+            .map_err(Into::into)
+    }
+
+    /// Arrivée d'un autre appareil reçue par ntfy pendant que l'appli tourne.
+    pub fn on_received<F: Fn(ReceivedArrival) + Send + Sync + 'static>(
+        &self,
+        handler: F,
+    ) -> Result<()> {
+        self.listen("received", handler)
+    }
+
+    /// Arrivées que l'appli a déjà fait sonner : Android ne les fera pas
+    /// sonner une deuxième fois en les recevant par ntfy.
+    pub fn mark_rung(&self, ids: Vec<String>) -> Result<()> {
+        self.0
+            .run_mobile_plugin("markRung", IdsArgs { ids })
             .map_err(Into::into)
     }
 
@@ -84,6 +141,15 @@ impl<R: Runtime> Geofence<R> {
     }
 
     pub fn on_arrival<F: Fn(Arrival) + Send + Sync + 'static>(&self, handler: F) -> Result<()> {
+        self.listen("arrival", handler)
+    }
+
+    /// Abonne `handler` à un évènement du plugin Kotlin (`trigger`).
+    fn listen<T, F>(&self, event: &'static str, handler: F) -> Result<()>
+    where
+        T: DeserializeOwned,
+        F: Fn(T) + Send + Sync + 'static,
+    {
         #[derive(Serialize)]
         struct RegisterListener {
             event: &'static str,
@@ -91,9 +157,9 @@ impl<R: Runtime> Geofence<R> {
         }
         let channel = Channel::new(move |body| {
             if let InvokeResponseBody::Json(payload) = body {
-                match serde_json::from_str::<Arrival>(&payload) {
-                    Ok(arrival) => handler(arrival),
-                    Err(e) => eprintln!("Évènement d'arrivée illisible ignoré : {e}"),
+                match serde_json::from_str::<T>(&payload) {
+                    Ok(value) => handler(value),
+                    Err(e) => eprintln!("Évènement « {event} » illisible ignoré : {e}"),
                 }
             }
             Ok(())
@@ -102,7 +168,7 @@ impl<R: Runtime> Geofence<R> {
             .run_mobile_plugin::<()>(
                 "registerListener",
                 RegisterListener {
-                    event: "arrival",
+                    event,
                     handler: channel,
                 },
             )

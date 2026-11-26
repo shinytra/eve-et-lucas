@@ -2,14 +2,27 @@
 //! même quand l'appli est fermée.
 //!
 //! Le module Kotlin (`android/`) enregistre une géofence « maison » auprès des
-//! services Google Play. À chaque entrée, son récepteur note la date dans les
+//! services Google Play. À chaque entrée (sauf moins de 5 min après la
+//! précédente), son récepteur note l'arrivée (identifiant et date) dans les
 //! préférences Android, affiche une notification et, si demandé, fait sonner
-//! le téléphone. L'appli récupère ensuite ces dates avec
+//! le téléphone. L'appli récupère ensuite ces arrivées avec
 //! [`Geofence::peek_arrivals`] puis les confirme avec [`Geofence::ack_arrivals`] (au démarrage, ou quand l'évènement
 //! [`Geofence::on_arrival`] la prévient alors qu'elle tourne déjà).
 //!
-//! Sur PC, chaque appel renvoie [`Error::Unsupported`] (sauf `peek_arrivals`
-//! et `ack_arrivals`, sans effet).
+//! Réveil par ntfy (UnifiedPush) : à chaque arrivée, Android chiffre
+//! `{"v":1,"kind":"arrival","id","who","device","at"}` en AES-256-GCM avec la
+//! clé commune ([`Geofence::set_push_config`]) et l'envoie (`POST` du texte
+//! `EL1.<base64(nonce || chiffré || tag)>`) aux adresses ntfy des autres
+//! appareils. À la réception, même appli fermée, Android déchiffre, ignore ce
+//! qui est illisible, ancien (plus de 15 min), venu de lui-même ou déjà
+//! sonné ([`Geofence::mark_rung`]), puis affiche « Eve arrive à la maison »
+//! avec le son du canal d'arrivée. L'appli lit ces arrivées avec
+//! [`Geofence::peek_received`] / [`Geofence::ack_received`] ou
+//! [`Geofence::on_received`]. Son adresse ntfy s'obtient avec
+//! [`Geofence::register_push`] puis [`Geofence::on_push_endpoint`].
+//!
+//! Sur PC, chaque appel renvoie [`Error::Unsupported`] (sauf la lecture des
+//! arrivées et le réveil par ntfy, sans effet).
 
 use tauri::{
     plugin::{Builder, TauriPlugin},

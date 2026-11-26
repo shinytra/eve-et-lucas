@@ -18,6 +18,9 @@ import app.tauri.plugin.Plugin
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import org.unifiedpush.android.connector.INSTANCE_DEFAULT
+import org.unifiedpush.android.connector.UnifiedPush
+import org.unifiedpush.android.connector.data.ResolvedDistributor
 
 private const val ALIAS_LOCATION = "location"
 private const val ALIAS_BACKGROUND = "backgroundLocation"
@@ -37,8 +40,16 @@ class RingArgs {
 }
 
 @InvokeArg
-class AckArgs {
-  var upTo: Long = 0L
+class IdsArgs {
+  var ids: List<String>? = null
+}
+
+@InvokeArg
+class PushConfigArgs {
+  var key: String? = null
+  var who: String? = null
+  var device: String? = null
+  var targets: List<String>? = null
 }
 
 @InvokeArg
@@ -63,11 +74,36 @@ class GeofencePlugin(private val activity: Activity) : Plugin(activity) {
     @Volatile
     private var instance: GeofencePlugin? = null
 
-    fun notifyArrival(at: Long) {
+    /** Paquet de l'appli ntfy, préféré s'il y a plusieurs distributeurs sans choix par défaut. */
+    private const val NTFY_PACKAGE = "io.heckel.ntfy"
+
+    fun notifyArrival(arrival: PendingArrival) {
       val plugin = instance ?: return
       val payload = JSObject()
-      payload.put("at", at)
+      payload.put("id", arrival.id)
+      payload.put("at", arrival.at)
       plugin.trigger("arrival", payload)
+    }
+
+    fun notifyReceived(arrival: ArrivalMessage) {
+      val plugin = instance ?: return
+      plugin.trigger("received", receivedJson(arrival))
+    }
+
+    fun notifyPushEndpoint(endpoint: String) {
+      val plugin = instance ?: return
+      val payload = JSObject()
+      payload.put("endpoint", endpoint)
+      plugin.trigger("pushEndpoint", payload)
+    }
+
+    private fun receivedJson(arrival: ArrivalMessage): JSObject {
+      val o = JSObject()
+      o.put("id", arrival.id)
+      o.put("who", arrival.who)
+      o.put("device", arrival.device)
+      o.put("at", arrival.at)
+      return o
     }
   }
 
@@ -159,18 +195,102 @@ class GeofencePlugin(private val activity: Activity) : Plugin(activity) {
 
   @Command
   fun ackArrivals(invoke: Invoke) {
-    val args = invoke.parseArgs(AckArgs::class.java)
-    GeofenceStore.ackArrivals(activity, args.upTo)
+    val args = invoke.parseArgs(IdsArgs::class.java)
+    GeofenceStore.ackArrivals(activity, args.ids.orEmpty().toSet())
     invoke.resolve()
   }
 
   @Command
   fun peekArrivals(invoke: Invoke) {
     val arrivals = JSArray()
-    for (at in GeofenceStore.peekArrivals(activity)) arrivals.put(at)
+    for (a in GeofenceStore.peekArrivals(activity)) {
+      val o = JSObject()
+      o.put("id", a.id)
+      o.put("at", a.at)
+      arrivals.put(o)
+    }
     val result = JSObject()
     result.put("arrivals", arrivals)
     invoke.resolve(result)
+  }
+
+  /** Réglages du réveil par ntfy (réécrits à chaque appel ; clé vide : pas d'envoi). */
+  @Command
+  fun setPushConfig(invoke: Invoke) {
+    val args = invoke.parseArgs(PushConfigArgs::class.java)
+    val key = args.key.orEmpty().trim()
+    if (key.isNotEmpty() && PushCrypto.decodeKey(key) == null) {
+      invoke.reject("Clé de chiffrement invalide : 32 octets en base64 attendus.")
+      return
+    }
+    val config = PushConfig(
+      key = key,
+      who = args.who.orEmpty().trim(),
+      device = args.device.orEmpty().trim(),
+      targets = PushSender.validTargets(args.targets.orEmpty())
+    )
+    GeofenceStore.savePushConfig(activity, config)
+    invoke.resolve()
+  }
+
+  /**
+   * S'enregistre auprès du distributeur UnifiedPush (l'appli ntfy). Sans
+   * distributeur installé : `available: false`, sans erreur. L'adresse arrive
+   * plus tard par l'évènement `pushEndpoint` ; celle déjà connue est renvoyée.
+   */
+  @Command
+  fun registerPush(invoke: Invoke) {
+    try {
+      val distributors = UnifiedPush.getDistributors(activity).filter { it != activity.packageName }
+      if (distributors.isEmpty()) {
+        invoke.resolve(pushStatus(false))
+        return
+      }
+      if (UnifiedPush.getSavedDistributor(activity) == null) {
+        val chosen = when (val resolved = UnifiedPush.resolveDefaultDistributor(activity)) {
+          is ResolvedDistributor.Found -> resolved.packageName
+          // Plusieurs distributeurs sans choix par défaut : pas de fenêtre
+          // système à ce stade, on prend ntfy s'il est là.
+          else -> if (NTFY_PACKAGE in distributors) NTFY_PACKAGE else distributors.first()
+        }
+        UnifiedPush.saveDistributor(activity, chosen)
+      }
+      UnifiedPush.register(activity, INSTANCE_DEFAULT, "Eve & Lucas : arrivées à la maison", null)
+      invoke.resolve(pushStatus(true))
+    } catch (e: Exception) {
+      invoke.reject("Enregistrement auprès de ntfy impossible : ${e.localizedMessage ?: e.toString()}")
+    }
+  }
+
+  private fun pushStatus(available: Boolean): JSObject {
+    val result = JSObject()
+    result.put("available", available)
+    GeofenceStore.pushEndpoint(activity)?.let { if (available) result.put("endpoint", it) }
+    return result
+  }
+
+  @Command
+  fun peekReceived(invoke: Invoke) {
+    val received = JSArray()
+    for (a in GeofenceStore.peekReceived(activity)) received.put(receivedJson(a))
+    val result = JSObject()
+    result.put("received", received)
+    invoke.resolve(result)
+  }
+
+  @Command
+  fun ackReceived(invoke: Invoke) {
+    val args = invoke.parseArgs(IdsArgs::class.java)
+    GeofenceStore.ackReceived(activity, args.ids.orEmpty().toSet())
+    invoke.resolve()
+  }
+
+  /** L'appli a déjà fait sonner ces arrivées : ntfy ne les fera pas sonner une deuxième fois. */
+  @Command
+  fun markRung(invoke: Invoke) {
+    val args = invoke.parseArgs(IdsArgs::class.java)
+    GeofenceStore.markRung(activity, args.ids.orEmpty())
+    invoke.resolve()
   }
 
   /**

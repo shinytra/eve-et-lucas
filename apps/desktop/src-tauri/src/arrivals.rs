@@ -98,7 +98,35 @@ pub fn set_arrival_person(state: State<'_, Arc<AppState>>, who: String) -> Resul
     let _guard = SETTINGS_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     let mut settings = load_settings(&state);
     settings.who = who.to_owned();
-    save_settings(&state, &settings)
+    save_settings(&state, &settings)?;
+    // Le plugin doit envoyer le bon prénom dans les réveils.
+    state.push_wanted.notify_one();
+    Ok(())
+}
+
+/// Ajoute une arrivée reçue par ntfy ; `already_rung` la marque comme déjà
+/// signalée (le téléphone a sonné tout seul en la recevant). Le verrou des
+/// réglages est tenu tout du long : la boucle de sonnerie ne peut pas la voir
+/// entre les deux. Renvoie `true` si elle était nouvelle.
+pub(crate) fn add_received(
+    state: &AppState,
+    arrival: &Arrival,
+    already_rung: bool,
+) -> Result<bool, String> {
+    let _guard = SETTINGS_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
+    let added = state
+        .arrivals
+        .change("d'enregistrer l'arrivée reçue", |d| {
+            d.add_with_id(&arrival.id, &arrival.who, &arrival.device, arrival.at)
+        })?;
+    if added.is_some() && already_rung {
+        let mut settings = load_settings(state);
+        if !settings.rung.contains(&arrival.id) {
+            settings.rung.push(arrival.id.clone());
+            save_settings(state, &settings)?;
+        }
+    }
+    Ok(added.is_some())
 }
 
 /// Texte de la notification pour une arrivée.
@@ -167,6 +195,19 @@ fn ring_new_arrivals(app: &AppHandle, state: &AppState) {
     if let Err(e) = save_settings(state, &settings) {
         eprintln!("{e}");
     }
+    // Pour que le téléphone ne sonne pas une deuxième fois si le réveil
+    // ntfy de la même arrivée arrive ensuite.
+    #[cfg(mobile)]
+    {
+        use tauri_plugin_geofence::GeofenceExt;
+        let ids: Vec<String> = to_ring.into_iter().map(|a| a.id).collect();
+        let app = app.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            if let Err(e) = app.geofence().mark_rung(ids) {
+                eprintln!("Impossible de noter les arrivées signalées : {e}");
+            }
+        });
+    }
 }
 
 /// Identifiants à retenir : ceux déjà signalés et ceux qu'on vient de
@@ -203,20 +244,19 @@ mod phone {
         if arrivals.is_empty() {
             return;
         }
-        // Dans l'ordre : en cas d'échec, on confirme seulement ce qui précède.
-        arrivals.sort_unstable();
+        arrivals.sort_by_key(|a| a.at);
         let who = match load_settings(state).who {
             who if !who.trim().is_empty() => who,
             _ => state.device_name(),
         };
         let device = state.self_id.to_string();
-        let mut saved_up_to = None;
-        for &at in &arrivals {
-            match state
-                .arrivals
-                .change("d'enregistrer l'arrivée", |d| d.add(&who, &device, at))
-            {
-                Ok(_) => saved_up_to = Some(saved_up_to.map_or(at, |m: i64| m.max(at))),
+        let mut saved = Vec::new();
+        for pending in arrivals {
+            // Même identifiant que dans le réveil envoyé par Android.
+            match state.arrivals.change("d'enregistrer l'arrivée", |d| {
+                d.add_with_id(&pending.id, &who, &device, pending.at)
+            }) {
+                Ok(_) => saved.push(pending.id),
                 Err(e) => {
                     // Android les garde : nouvel essai au prochain évènement
                     // ou au prochain démarrage.
@@ -226,8 +266,8 @@ mod phone {
             }
         }
         // Android oublie seulement ce qui est bien enregistré.
-        if let Some(up_to) = saved_up_to {
-            if let Err(e) = app.geofence().ack_arrivals(up_to) {
+        if !saved.is_empty() {
+            if let Err(e) = app.geofence().ack_arrivals(saved) {
                 eprintln!("Impossible de confirmer les arrivées : {e}");
             }
         }

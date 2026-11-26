@@ -12,6 +12,8 @@ autosurgeon.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
-
-[dev-dependencies]
+# Messages de réveil chiffrés (déjà utilisés par iroh, donc déjà dans l'arbre).
+aes-gcm = "0.10"
+data-encoding = "2"
 serde_json.workspace = true
+
