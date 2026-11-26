@@ -36,6 +36,7 @@ EVE_ET_LUCAS_DATA_DIR=/tmp/essai cargo run -p eve-et-lucas-desktop   # appli ave
 cd apps/desktop/src-tauri && npm ci && npm run tauri -- android init   # (ou cargo tauri android init) génère gen/android (non versionné), besoin du SDK + NDK (NDK_HOME)
 cargo tauri android dev                 # appli sur l'émulateur ou un téléphone branché
 cargo tauri android build --debug --apk --target aarch64   # APK de test ; la CI le fait (workflow « Android »)
+# Version à télécharger : workflow « Version à télécharger » (release.yml, lancé à la main ou par une étiquette vX.Y.Z = version de tauri.conf.json) : installateur Windows NSIS + APK dans une Release GitHub
 ```
 
 Sous Linux, Tauri a besoin de `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev`.
