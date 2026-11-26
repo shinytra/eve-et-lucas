@@ -26,8 +26,9 @@ cargo tauri dev --features mcp-bridge   # idem, avec la CLI Tauri (cargo install
 cd apps/desktop/e2e && npm install && npm test   # test de bout en bout via le MCP Tauri (appli lancée avec --features mcp-bridge)
 cargo build -p couple-sync --example peer && (cd apps/desktop/e2e && node pairing.mjs)   # appairage + synchro avec un faux téléphone
 EVE_ET_LUCAS_DATA_DIR=/tmp/essai cargo run -p eve-et-lucas-desktop   # appli avec un autre dossier de données
-cargo tauri android init                # plus tard : génère le projet Android
-cargo tauri android dev
+cargo tauri android init                # génère gen/android (non versionné), besoin du SDK + NDK (NDK_HOME)
+cargo tauri android dev                 # appli sur l'émulateur ou un téléphone branché
+cargo tauri android build --debug --apk --target aarch64   # APK de test ; la CI le fait (workflow « Android »)
 ```
 
 Sous Linux, Tauri a besoin de `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev`.
@@ -42,6 +43,7 @@ Sous Linux, Tauri a besoin de `libwebkit2gtk-4.1-dev libayatana-appindicator3-de
 - Les dates sont des millisecondes Unix (`i64`) passées en paramètre au cœur, pour des tests déterministes.
 - CSP : `csp` (versions distribuées) reste stricte. `devCsp` autorise `unsafe-inline`/`unsafe-eval` uniquement pour que le pont MCP injecte ses scripts en développement. Jamais de script inline dans `ui/`.
 - L'interface doit rester utilisable à 360 px de large (elle servira telle quelle sur Android).
+- Code réservé au téléphone : `#[cfg(mobile)]` côté Rust, dépendance sous `[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]`, permissions dans `capabilities/mobile.json`. Le réseau de ce conteneur bloque le SDK Android : l'APK est construit et vérifié par la CI.
 - Avant un commit : skill `verifier` (fmt, clippy, tests). La CI GitHub fait la même chose.
 
 ## Outillage Claude Code du dépôt
@@ -71,7 +73,7 @@ Plutôt que de réécrire, s'inspirer de (ou dépendre de) :
 1. ✅ Base Tauri 2 + notes partagées en local.
 2. a. ✅ Appli PC en tâche de fond : icône dans la barre des tâches, fermer la fenêtre la cache, lancement au démarrage (option du menu de l'icône, démarre fenêtre cachée), une seule instance.
    b. ✅ Synchro iroh entre appareils + appairage par QR code (écran « Appareils »).
-3. Appli Android avec la même base.
+3. ✅ Appli Android avec la même base (APK construit par la CI, scan du QR code d'appairage ; reste à essayer sur vos téléphones).
 4. Tâches communes et rappels (notifications).
 5. Partage de fichiers P2P (iroh-blobs).
 6. Sonnerie à l'arrivée (géofencing, plugin Kotlin).
