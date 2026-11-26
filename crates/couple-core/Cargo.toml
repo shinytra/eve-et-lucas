@@ -1,6 +1,7 @@
 [package]
 name = "couple-core"
 version = "0.1.0"
+publish = false
 description = "Cœur partagé (PC + Android) : données du couple stockées dans un document Automerge."
 edition.workspace = true
 license.workspace = true

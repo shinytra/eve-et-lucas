@@ -1,6 +1,7 @@
 [package]
 name = "tauri-plugin-geofence"
 version = "0.1.0"
+publish = false
 description = "Détection de l'arrivée à la maison (géofencing Android), même appli fermée."
 edition.workspace = true
 license.workspace = true

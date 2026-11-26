@@ -1,6 +1,7 @@
 [package]
 name = "tauri-plugin-home-widget"
 version = "0.1.0"
+publish = false
 description = "Widget d'écran d'accueil Android : tâches à faire et dernière arrivée, cases à cocher."
 edition.workspace = true
 license.workspace = true
