@@ -1,0 +1,11 @@
+{
+  "name": "eve-et-lucas-tauri",
+  "private": true,
+  "description": "CLI Tauri pour la compilation Android (Gradle l'appelle via « npm run tauri »).",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.6"
+  }
+}

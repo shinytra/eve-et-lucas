@@ -28,12 +28,17 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: android
+      # Gradle rappelle la CLI Tauri par « npm run tauri » : elle doit être
+      # installée dans src-tauri (version épinglée par package-lock.json).
+      - name: Installer la CLI Tauri
+        working-directory: apps/desktop/src-tauri
+        run: npm ci
       - name: Générer le projet Android
         working-directory: apps/desktop/src-tauri
-        run: NDK_HOME="$ANDROID_NDK_LATEST_HOME" npx --yes @tauri-apps/cli@2.12.6 android init --ci
+        run: NDK_HOME="$ANDROID_NDK_LATEST_HOME" npm run tauri -- android init --ci
       - name: Construire l'APK
         working-directory: apps/desktop/src-tauri
-        run: NDK_HOME="$ANDROID_NDK_LATEST_HOME" npx --yes @tauri-apps/cli@2.12.6 android build --debug --apk --target aarch64 --ci
+        run: NDK_HOME="$ANDROID_NDK_LATEST_HOME" npm run tauri -- android build --debug --apk --target aarch64 --ci
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: eve-et-lucas-android-debug

@@ -26,7 +26,7 @@ cargo tauri dev --features mcp-bridge   # idem, avec la CLI Tauri (cargo install
 cd apps/desktop/e2e && npm install && npm test   # test de bout en bout via le MCP Tauri (appli lancée avec --features mcp-bridge)
 cargo build -p couple-sync --example peer && (cd apps/desktop/e2e && node pairing.mjs)   # appairage + synchro avec un faux téléphone
 EVE_ET_LUCAS_DATA_DIR=/tmp/essai cargo run -p eve-et-lucas-desktop   # appli avec un autre dossier de données
-cargo tauri android init                # génère gen/android (non versionné), besoin du SDK + NDK (NDK_HOME)
+cd apps/desktop/src-tauri && npm ci && npm run tauri -- android init   # (ou cargo tauri android init) génère gen/android (non versionné), besoin du SDK + NDK (NDK_HOME)
 cargo tauri android dev                 # appli sur l'émulateur ou un téléphone branché
 cargo tauri android build --debug --apk --target aarch64   # APK de test ; la CI le fait (workflow « Android »)
 ```
