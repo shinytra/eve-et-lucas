@@ -77,6 +77,27 @@
         <ul id="tasks"></ul>
       </section>
 
+      <section aria-labelledby="animes-title" class="animes verre">
+        <h2 id="animes-title">Animés</h2>
+        <form id="anime-search" class="ligne" autocomplete="off" novalidate role="search">
+          <input id="anime-query" type="search" placeholder="Chercher un animé à ajouter" maxlength="100" aria-label="Titre de l'animé" />
+          <button type="submit" id="anime-search-go">Chercher</button>
+        </form>
+        <p id="anime-status" class="meta" role="status" hidden></p>
+        <p id="anime-error" role="alert" hidden></p>
+        <div id="anime-results" hidden>
+          <ul id="anime-results-list" class="resultats"></ul>
+          <div class="actions">
+            <button type="button" id="anime-manual">Ajouter à la main</button>
+            <button type="button" id="anime-results-close">Fermer</button>
+          </div>
+          <p class="aide">Recherche, affiches et nombre d'épisodes : AniList (anilist.co).</p>
+        </div>
+        <div id="anime-filters" class="filtres" role="group" aria-label="Afficher"></div>
+        <p id="animes-empty" class="meta" hidden>Aucun animé pour l'instant : cherchez-en un pour commencer votre liste.</p>
+        <ul id="animes"></ul>
+      </section>
+
       <section aria-labelledby="dates-title" class="dates verre">
         <h2 id="dates-title">Dates importantes</h2>
         <div id="date-next" class="date-next" hidden></div>
@@ -278,6 +299,7 @@
 
     <script src="main.js"></script>
     <script src="tasks.js"></script>
+    <script src="animes.js"></script>
     <script src="dates.js"></script>
     <script src="files.js"></script>
     <script src="arrivals.js"></script>
