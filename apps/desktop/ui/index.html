@@ -62,6 +62,31 @@
         <ul id="notes"></ul>
       </section>
 
+      <section aria-labelledby="home-title" class="home">
+        <h2 id="home-title">Arrivée à la maison</h2>
+        <p class="meta">Quand l'un de vous approche de la maison, son téléphone prévient les autres appareils, qui sonnent.</p>
+        <div id="home-phone" hidden>
+          <label>
+            Ce téléphone est celui de
+            <select id="home-who">
+              <option>Lucas</option>
+              <option>Eve</option>
+            </select>
+          </label>
+          <p id="home-state" class="meta"></p>
+          <label class="check">
+            <input id="home-ring" type="checkbox" />
+            Sonner aussi sur ce téléphone en arrivant
+          </label>
+          <div class="actions">
+            <button type="button" id="home-clear" class="danger" hidden>Ne plus surveiller</button>
+            <button type="button" id="home-set">Je suis à la maison : enregistrer ici</button>
+          </div>
+        </div>
+        <p id="home-error" role="alert" hidden></p>
+        <ul id="arrivals"></ul>
+      </section>
+
       <section aria-labelledby="files-title" class="files">
         <h2 id="files-title">Fichiers partagés</h2>
         <div class="actions">
@@ -116,6 +141,7 @@
     <script src="main.js"></script>
     <script src="tasks.js"></script>
     <script src="files.js"></script>
+    <script src="arrivals.js"></script>
     <script src="devices.js"></script>
   </body>
 </html>

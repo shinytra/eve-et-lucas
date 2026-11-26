@@ -4,12 +4,14 @@
 //! données du couple et leurs règles. Il sera utilisé tel quel par l'appli PC,
 //! l'appli Android et, plus tard, par la synchro iroh.
 
+pub mod arrivals;
 pub mod devices;
 pub mod files;
 pub mod notes;
 pub mod sync;
 pub mod tasks;
 
+pub use arrivals::{Arrival, ArrivalsDoc};
 pub use devices::{Device, DevicesDoc};
 pub use files::{FilesDoc, SharedFile};
 pub use notes::{Note, NotesDoc};
