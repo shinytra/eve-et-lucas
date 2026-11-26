@@ -94,8 +94,18 @@ fn plan(
     Plan { show, hide, forget }
 }
 
+/// Début du titre de chaque rappel : sert aussi à les reconnaître parmi les
+/// notifications affichées (les arrivées, elles, ne doivent pas être effacées).
+const TITLE_PREFIX: &str = "Rappel : ";
+
 fn title(task: &Task) -> String {
-    format!("Rappel : {}", task.title)
+    format!("{TITLE_PREFIX}{}", task.title)
+}
+
+/// Une notification affichée est-elle un rappel de tâche ?
+#[cfg_attr(not(mobile), allow(dead_code))]
+fn is_reminder(title: Option<&str>) -> bool {
+    title.is_some_and(|t| t.starts_with(TITLE_PREFIX))
 }
 
 fn body(task: &Task) -> String {
@@ -217,7 +227,14 @@ mod mobile {
     /// Notifications de l'appli actuellement affichées par Android.
     pub fn visible(app: &AppHandle) -> Option<HashSet<i32>> {
         match app.notification().active() {
-            Ok(list) => Some(list.iter().map(|n| n.id()).collect()),
+            // Seulement les rappels : la boucle efface les notifications
+            // affichées sans être échues, pas les arrivées.
+            Ok(list) => Some(
+                list.iter()
+                    .filter(|n| super::is_reminder(n.title()))
+                    .map(|n| n.id())
+                    .collect(),
+            ),
             Err(e) => {
                 eprintln!("Liste des notifications indisponible : {e}");
                 None
@@ -359,6 +376,26 @@ mod tests {
             created_at: 0,
             updated_at: 0,
         }
+    }
+
+    #[test]
+    fn only_reminders_are_recognised() {
+        let task = Task {
+            id: "t".into(),
+            title: "Pain".into(),
+            author: "Eve".into(),
+            assignee: String::new(),
+            due_at: None,
+            done: false,
+            done_by: String::new(),
+            done_at: None,
+            created_at: 0,
+            updated_at: 0,
+        };
+        assert!(is_reminder(Some(&title(&task))));
+        assert!(!is_reminder(Some("Eve arrive à la maison")));
+        assert!(!is_reminder(Some("Bienvenue à la maison")));
+        assert!(!is_reminder(None));
     }
 
     #[test]

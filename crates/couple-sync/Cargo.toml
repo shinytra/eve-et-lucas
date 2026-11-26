@@ -1,6 +1,7 @@
 [package]
 name = "couple-sync"
 version = "0.1.0"
+publish = false
 description = "Synchro P2P (iroh) des documents du couple entre appareils appairés."
 edition.workspace = true
 license.workspace = true

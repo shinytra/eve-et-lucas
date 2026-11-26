@@ -12,7 +12,7 @@
 
 use std::sync::Arc;
 
-use couple_core::Arrival;
+use couple_core::{arrivals::RING_WITHIN_MS, Arrival};
 use couple_sync::Store;
 use tauri::AppHandle;
 
@@ -43,18 +43,39 @@ pub fn start(app: &AppHandle, state: Arc<AppState>) {
 
 /// Ajoute une arrivée reçue par ntfy. `already_rung` : le téléphone a déjà
 /// sonné de lui-même (code Kotlin), il ne faut pas sonner une deuxième fois.
-pub(crate) fn accept(state: &AppState, arrival: Arrival, already_rung: bool) {
-    if arrival.device == state.self_id.to_string() {
-        return;
+///
+/// Renvoie `Ok(true)` quand le message est traité (ajouté, déjà connu, ou à
+/// ignorer : venant de soi-même, daté dans le futur ou trop ancien pour
+/// sonner), `Ok(false)` quand il faut le garder pour plus tard : appareil pas
+/// encore connu ici (la liste des appareils n'est peut-être pas encore
+/// synchronisée). `Err` si l'enregistrement a échoué.
+pub(crate) fn accept(
+    state: &AppState,
+    arrival: Arrival,
+    already_rung: bool,
+) -> Result<bool, String> {
+    let now = crate::now_ms();
+    if arrival.device == state.self_id.to_string()
+        || arrival.at > now + 60_000
+        || now - arrival.at > RING_WITHIN_MS
+    {
+        return Ok(true);
     }
-    match crate::arrivals::add_received(state, &arrival, already_rung) {
-        Ok(true) => {
-            state.sync_wanted.notify_one();
-            Store::changed(state, &[ARRIVALS_DOC.to_owned()]);
-        }
-        Ok(false) => {}
-        Err(e) => state.notice(e),
+    let known = state
+        .devices
+        .lock()
+        .list()
+        .iter()
+        .any(|d| d.id == arrival.device);
+    if !known {
+        eprintln!("Arrivée reçue par ntfy d'un appareil inconnu ici : mise de côté");
+        return Ok(false);
     }
+    if crate::arrivals::add_received(state, &arrival, already_rung)? {
+        state.sync_wanted.notify_one();
+        Store::changed(state, &[ARRIVALS_DOC.to_owned()]);
+    }
+    Ok(true)
 }
 
 #[cfg(desktop)]
@@ -135,10 +156,24 @@ mod desktop {
         };
         let mut since = CATCH_UP.to_owned();
         let mut delay = Duration::from_secs(5);
+        let mut failures = 0u32;
         loop {
-            match listen_once(&client, &state, &topic, &mut since).await {
-                Ok(()) => delay = Duration::from_secs(5),
-                Err(e) => eprintln!("Écoute ntfy interrompue : {e}"),
+            let mut connected = false;
+            if let Err(e) = listen_once(&client, &state, &topic, &mut since, &mut connected).await {
+                eprintln!("Écoute ntfy interrompue : {e}");
+            }
+            if connected {
+                // La connexion a marché : une coupure ordinaire, on revient vite.
+                delay = Duration::from_secs(5);
+                failures = 0;
+            } else {
+                failures += 1;
+                if failures == 12 {
+                    state.notice(
+                        "ntfy.sh injoignable depuis un moment : le PC ne sera prévenu des arrivées que par la synchro."
+                            .to_owned(),
+                    );
+                }
             }
             tokio::time::sleep(delay).await;
             delay = (delay * 2).min(Duration::from_secs(300));
@@ -151,6 +186,7 @@ mod desktop {
         state: &AppState,
         topic: &str,
         since: &mut String,
+        connected: &mut bool,
     ) -> Result<(), String> {
         let url = format!("{SERVER}/{topic}/json?since={since}");
         let mut response = client
@@ -159,12 +195,14 @@ mod desktop {
             .await
             .and_then(reqwest::Response::error_for_status)
             .map_err(|e| e.to_string())?;
+        *connected = true;
         let mut buffer = Vec::new();
         while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
             buffer.extend_from_slice(&chunk);
             while let Some(end) = buffer.iter().position(|&b| b == b'\n') {
                 let line: Vec<u8> = buffer.drain(..=end).collect();
-                handle_line(state, &line, since);
+                // L'enregistrement d'une arrivée bloque (fsync).
+                tokio::task::block_in_place(|| handle_line(state, &line, since));
             }
             if buffer.len() > 64 * 1024 {
                 return Err("évènement ntfy trop long".to_owned());
@@ -199,7 +237,13 @@ mod desktop {
             return;
         };
         match open(&key, &text).map(couple_core::PushMessage::into_arrival) {
-            Ok(Some(arrival)) => super::accept(state, arrival, false),
+            Ok(Some(arrival)) => {
+                // Appareil inconnu (`Ok(false)`) : rien à garder sur PC, le
+                // sujet est rattrapé au démarrage et la synchro suivra.
+                if let Err(e) = super::accept(state, arrival, false) {
+                    state.notice(e);
+                }
+            }
             Ok(None) => {}
             Err(e) => eprintln!("Message de réveil ignoré : {e}"),
         }
@@ -225,6 +269,22 @@ mod desktop {
             let text = seal(&key, &PushMessage::arrival(&arrival)).unwrap();
             let line = serde_json::json!({"id": "abc123", "event": "message", "message": text});
             let mut since = CATCH_UP.to_owned();
+
+            // Pas encore appairé : ignoré.
+            handle_line(&state, line.to_string().as_bytes(), &mut since);
+            assert!(state.arrivals.lock().list().is_empty());
+            state
+                .devices
+                .change("", |d| d.upsert("tel-eve", "Téléphone d'Eve", 1))
+                .unwrap();
+            // Daté dans le futur : ignoré.
+            let mut future = arrival.clone();
+            future.at += 3_600_000;
+            let text_future = seal(&key, &PushMessage::arrival(&future)).unwrap();
+            let line_future =
+                serde_json::json!({"id": "f1", "event": "message", "message": text_future});
+            handle_line(&state, line_future.to_string().as_bytes(), &mut since);
+            assert!(state.arrivals.lock().list().is_empty());
 
             // Messages étrangers : ignorés, sans rien casser.
             handle_line(&state, br#"{"event":"keepalive","id":"k1"}"#, &mut since);
@@ -258,10 +318,10 @@ mod desktop {
 }
 
 #[cfg(mobile)]
-mod phone {
+pub(crate) mod phone {
     use std::{sync::Arc, time::Duration};
 
-    use couple_core::Arrival;
+    use couple_core::{arrivals::RING_WITHIN_MS, Arrival};
     use couple_sync::Store;
     use tauri::AppHandle;
     use tauri_plugin_geofence::{GeofenceExt, PushConfig};
@@ -328,6 +388,20 @@ mod phone {
     /// Publie l'adresse donnée par ntfy dans le document `push`.
     fn save_endpoint(state: &AppState, endpoint: &str) {
         let me = state.self_id.to_string();
+        if endpoint.trim().is_empty() {
+            // Plus inscrit auprès de ntfy : les autres n'envoient plus ici.
+            match state
+                .push
+                .change("d'oublier l'adresse de réveil", |d| d.remove_target(&me))
+            {
+                Ok(()) => {
+                    state.sync_wanted.notify_one();
+                    Store::changed(state, &[PUSH_DOC.to_owned()]);
+                }
+                Err(e) => eprintln!("{e}"),
+            }
+            return;
+        }
         let same = state
             .push
             .lock()
@@ -364,7 +438,12 @@ mod phone {
                 push.targets_except(&me, &allowed),
             )
         };
-        let who = crate::arrivals::load_settings(state).who;
+        // Même repli que pour les arrivées enregistrées : sans prénom, les
+        // autres refuseraient le message.
+        let who = match crate::arrivals::load_settings(state).who {
+            who if !who.trim().is_empty() => who,
+            _ => state.device_name(),
+        };
         let config = PushConfig {
             key,
             who,
@@ -377,7 +456,7 @@ mod phone {
     }
 
     /// Arrivées des autres reçues par ntfy pendant que l'appli dormait.
-    fn ingest_received(app: &AppHandle, state: &AppState) {
+    pub(crate) fn ingest_received(app: &AppHandle, state: &AppState) {
         let received = match app.geofence().peek_received() {
             Ok(list) => list,
             Err(e) => {
@@ -390,7 +469,7 @@ mod phone {
         }
         let mut ids = Vec::new();
         for r in received {
-            ids.push(r.id.clone());
+            let id = r.id.clone();
             let arrival = Arrival {
                 id: r.id,
                 who: r.who,
@@ -398,7 +477,20 @@ mod phone {
                 at: r.at,
             };
             // Le téléphone a déjà sonné en recevant le message.
-            super::accept(state, arrival, true);
+            match super::accept(state, arrival, true) {
+                Ok(true) => ids.push(id),
+                // Gardée par Android : reprise quand l'appareil sera connu
+                // (au-delà de 15 min, elle sera simplement oubliée).
+                Ok(false) => {}
+                // Pas confirmée : Android la garde pour un nouvel essai.
+                Err(e) => {
+                    state.notice(e);
+                    break;
+                }
+            }
+        }
+        if ids.is_empty() {
+            return;
         }
         if let Err(e) = app.geofence().ack_received(ids) {
             eprintln!("Impossible de confirmer les réveils reçus : {e}");

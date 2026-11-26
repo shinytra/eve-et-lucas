@@ -244,6 +244,7 @@ pub fn rename_this_device(state: State<'_, Arc<AppState>>, name: String) -> Resu
         .devices
         .change("de renommer l'appareil", |d| d.upsert(&id, &name, now_ms()))?;
     state.sync_wanted.notify_one();
+    couple_sync::Store::changed(&**state, &[crate::store::DEVICES_DOC.to_owned()]);
     Ok(())
 }
 
@@ -255,8 +256,20 @@ pub fn remove_device(state: State<'_, Arc<AppState>>, id: String) -> Result<(), 
     state
         .devices
         .change("de retirer l'appareil", |d| d.remove(&id, now_ms()))?;
+    // Nouvelle clé de réveil : l'appareil retiré garde l'ancienne, mais ne
+    // peut plus ni lire ni fabriquer de réveils acceptés.
+    let rotated = state
+        .push
+        .change("de changer la clé de réveil", |d| d.rotate_key(&id));
     state.sync_wanted.notify_one();
-    Ok(())
+    couple_sync::Store::changed(
+        &**state,
+        &[
+            crate::store::DEVICES_DOC.to_owned(),
+            crate::store::PUSH_DOC.to_owned(),
+        ],
+    );
+    rotated
 }
 
 #[derive(Debug, Serialize)]
