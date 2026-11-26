@@ -156,7 +156,7 @@ pub fn run() {
             };
             let state = Arc::new(AppState::load(&data_dir, &default_device_name())?);
             app.manage(state.clone());
-            app.manage(appearance::AppearanceState::load(&data_dir)?);
+            app.manage(appearance::AppearanceState::load(&data_dir));
             sync::start(app.handle(), state.clone());
             reminders::start(app.handle(), state.clone());
             arrivals::start(app.handle(), state.clone());

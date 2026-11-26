@@ -80,6 +80,9 @@
   }
 
   let wallpaperImage = null; // data URL de l'image de fond, si elle existe
+  // Tant que l'image n'est pas chargée, un fond « image » reste sur la couleur
+  // unie au lieu de montrer brièvement les taches de couleur.
+  let wallpaperLoaded = false;
 
   function apply(a) {
     for (const [name, value] of Object.entries(themeVars(a))) root.style.setProperty(name, value);
@@ -92,8 +95,23 @@
       root.setAttribute("data-image", "");
     } else {
       root.style.removeProperty("--wall-image");
-      root.removeAttribute("data-image");
+      root.toggleAttribute("data-image", !wallpaperLoaded && a.wallpaper === "image");
     }
+  }
+
+  // Le cache local n'est pas passé par le cœur : on vérifie chaque valeur.
+  function validCache(a) {
+    if (!a || typeof a !== "object") return false;
+    const colors = ["accent", "accent2", "text", "glass_tint"].map((k) => a[k]);
+    const numbers = ["glass_opacity", "blur", "saturation", "border_width", "border_opacity", "radius", "shadow", "grain", "font_scale", "wallpaper_blur", "wallpaper_dim"].map((k) => a[k]);
+    return (
+      colors.every(isHex) &&
+      Array.isArray(a.wallpaper_colors) &&
+      a.wallpaper_colors.length === 3 &&
+      a.wallpaper_colors.every(isHex) &&
+      numbers.every((n) => Number.isFinite(n) && n >= 0 && n <= 1000) &&
+      ["mesh", "linear", "solid", "image"].includes(a.wallpaper)
+    );
   }
 
   // Le dernier thème est gardé sur l'appareil pour s'afficher tout de suite au
@@ -105,7 +123,7 @@
   }
   try {
     const cached = JSON.parse(localStorage.getItem(CACHE_KEY) ?? "null");
-    if (cached && isHex(cached.text) && Array.isArray(cached.wallpaper_colors)) apply(cached);
+    if (validCache(cached)) apply(cached);
   } catch {}
 
   // ---------- Écran des réglages ----------
@@ -114,6 +132,22 @@
   if (!invoke) return; // main.js affiche déjà le message d'erreur.
 
   const $ = (id) => document.getElementById(id);
+
+  // Les écritures passent l'une après l'autre, dans l'ordre des clics.
+  let writes = Promise.resolve();
+  function write(command, args) {
+    const result = writes.then(() => invoke(command, args));
+    writes = result.catch(() => {});
+    return result;
+  }
+
+  // Une action qui remplace tout le thème annule d'abord l'enregistrement
+  // différé encore en attente, sinon il écraserait le nouveau thème.
+  function replacing(command, args) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    return write(command, args);
+  }
   let view = null; // { current, saved, presets, limits }
   let current = null;
   const controls = []; // fonctions qui remettent chaque contrôle à jour
@@ -136,7 +170,7 @@
     saveTimer = setTimeout(async () => {
       saveTimer = null;
       try {
-        await invoke("set_appearance", { appearance: current });
+        await write("set_appearance", { appearance: current });
         status("Enregistré");
       } catch (e) {
         status(String(e), true);
@@ -358,7 +392,7 @@
 
   async function setImage(dataUrl) {
     try {
-      await invoke("set_wallpaper", { dataUrl });
+      await write("set_wallpaper", { dataUrl });
     } catch (e) {
       status(String(e), true);
       return;
@@ -411,7 +445,7 @@
           "data-preset": p.id,
           onclick: async () => {
             try {
-              replace(await invoke("apply_preset", { id: p.id }), `Préréglage « ${p.name} » appliqué`);
+              replace(await replacing("apply_preset", { id: p.id }), `Préréglage « ${p.name} » appliqué`);
             } catch (e) {
               status(String(e), true);
             }
@@ -457,7 +491,7 @@
               type: "button",
               onclick: async () => {
                 try {
-                  replace(await invoke("apply_saved_theme", { id: t.id }), `Thème « ${t.name} » appliqué`);
+                  replace(await replacing("apply_saved_theme", { id: t.id }), `Thème « ${t.name} » appliqué`);
                 } catch (e) {
                   status(String(e), true);
                 }
@@ -473,7 +507,7 @@
               "aria-label": `Supprimer ${t.name}`,
               onclick: async () => {
                 try {
-                  view = await invoke("delete_theme", { id: t.id });
+                  view = await write("delete_theme", { id: t.id });
                   renderSaved();
                   status(`Thème « ${t.name} » supprimé`);
                 } catch (e) {
@@ -499,7 +533,7 @@
     if (saveTimer === null) return;
     clearTimeout(saveTimer);
     saveTimer = null;
-    await invoke("set_appearance", { appearance: current });
+    await write("set_appearance", { appearance: current });
   }
 
   // --- Ouverture, onglets ---
@@ -515,6 +549,7 @@
   }
 
   function close() {
+    flush().catch((e) => status(String(e), true));
     panel.hidden = true;
     document.body.classList.remove("reglages-ouverts");
     openButton.setAttribute("aria-expanded", "false");
@@ -557,7 +592,7 @@
     $("reset-preset").addEventListener("click", async () => {
       try {
         const p = view.presets.find((x) => x.id === current.preset) ?? view.presets[0];
-        replace(await invoke("apply_preset", { id: p.id }), `Préréglage « ${p.name} » rétabli`);
+        replace(await replacing("apply_preset", { id: p.id }), `Préréglage « ${p.name} » rétabli`);
       } catch (e) {
         status(String(e), true);
       }
@@ -568,7 +603,7 @@
       const name = $("theme-name").value;
       try {
         await flush();
-        view = await invoke("save_theme", { name });
+        view = await write("save_theme", { name });
         $("theme-name").value = "";
         renderSaved();
         status("Thème enregistré dans « Mes thèmes »");
@@ -591,7 +626,7 @@
 
     $("import-theme").addEventListener("click", async () => {
       try {
-        replace(await invoke("import_theme", { code: $("import-code").value }), "Thème importé");
+        replace(await replacing("import_theme", { code: $("import-code").value }), "Thème importé");
         $("import-code").value = "";
       } catch (e) {
         status(String(e), true);
@@ -610,6 +645,7 @@
       panel = $("settings");
       openButton = $("open-settings");
       [view, wallpaperImage] = await Promise.all([invoke("get_appearance"), invoke("get_wallpaper")]);
+      wallpaperLoaded = true;
     } catch (e) {
       console.error("Apparence indisponible :", e);
       return;
@@ -622,6 +658,11 @@
     renderSaved();
     refreshControls();
     wire();
+    // Enregistre les derniers réglages si l'appli passe en arrière-plan ou se ferme.
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") flush().catch(() => {});
+    });
+    window.addEventListener("pagehide", () => flush().catch(() => {}));
     if (view.warning) status(view.warning, true);
     // Pour les tests de bout en bout.
     window.__apparence = { get: () => current, presets: () => view.presets.map((p) => p.id) };

@@ -40,37 +40,49 @@ pub struct AppearanceView {
 }
 
 impl AppearanceState {
-    /// Charge les réglages. Un fichier illisible est mis de côté et l'appli
+    /// Charge les réglages. Ne bloque jamais le démarrage : un fichier
+    /// illisible est mis de côté (ou ignoré si même cela échoue) et l'appli
     /// repart du thème par défaut, avec un avertissement.
-    pub fn load(data_dir: &Path) -> std::io::Result<Self> {
-        fs::create_dir_all(data_dir)?;
+    pub fn load(data_dir: &Path) -> Self {
         let path = data_dir.join(APPEARANCE_FILE);
-        let mut startup_warning = None;
-        let settings = match fs::read(&path) {
+        let (settings, startup_warning) = match fs::read(&path) {
             Ok(bytes) => match AppearanceSettings::from_json(&bytes) {
-                Ok(settings) => settings,
+                Ok(settings) => (settings, None),
                 Err(e) => {
                     let backup = path.with_extension(format!("corrompu-{}", now_ms()));
-                    fs::rename(&path, &backup)?;
-                    let message = format!(
-                        "Les réglages d'apparence étaient illisibles ({e}). Ils ont été mis de \
-                         côté dans {} et le thème par défaut est rétabli.",
-                        backup.display()
-                    );
+                    let message = match fs::rename(&path, &backup) {
+                        Ok(()) => format!(
+                            "Les réglages d'apparence étaient illisibles ({e}). Ils ont été mis \
+                             de côté dans {} et le thème par défaut est rétabli.",
+                            backup.display()
+                        ),
+                        Err(rename) => format!(
+                            "Les réglages d'apparence étaient illisibles ({e}) et n'ont pas pu \
+                             être mis de côté ({rename}). Le thème par défaut est utilisé."
+                        ),
+                    };
                     eprintln!("{message}");
-                    startup_warning = Some(message);
-                    AppearanceSettings::default()
+                    (AppearanceSettings::default(), Some(message))
                 }
             },
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => AppearanceSettings::default(),
-            Err(e) => return Err(e),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                (AppearanceSettings::default(), None)
+            }
+            Err(e) => {
+                let message = format!(
+                    "Impossible de lire les réglages d'apparence ({e}). Le thème par défaut est \
+                     utilisé."
+                );
+                eprintln!("{message}");
+                (AppearanceSettings::default(), Some(message))
+            }
         };
-        Ok(Self {
+        Self {
             settings: Mutex::new(settings),
             path,
             wallpaper_path: data_dir.join(WALLPAPER_FILE),
             startup_warning,
-        })
+        }
     }
 
     fn lock(&self) -> MutexGuard<'_, AppearanceSettings> {
@@ -176,14 +188,25 @@ pub fn import_theme(state: State<'_, AppearanceState>, code: String) -> Result<A
 /// Image de fond enregistrée, s'il y en a une (illisible : ignorée).
 #[tauri::command]
 pub fn get_wallpaper(state: State<'_, AppearanceState>) -> Option<String> {
-    let data = fs::read_to_string(&state.wallpaper_path).ok()?;
-    match appearance::validate_wallpaper(&data) {
-        Ok(()) => Some(data),
-        Err(e) => {
-            eprintln!("Image de fond ignorée : {e}");
-            None
-        }
+    let path = &state.wallpaper_path;
+    let error = match fs::read_to_string(path) {
+        Ok(data) => match appearance::validate_wallpaper(&data) {
+            Ok(()) => return Some(data),
+            Err(e) => e.to_string(),
+        },
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(e) => e.to_string(),
+    };
+    // Fichier illisible : mis de côté pour ne pas le relire à chaque démarrage.
+    let backup = path.with_extension(format!("corrompu-{}", now_ms()));
+    match fs::rename(path, &backup) {
+        Ok(()) => eprintln!(
+            "Image de fond illisible ({error}), mise de côté dans {}",
+            backup.display()
+        ),
+        Err(e) => eprintln!("Image de fond illisible ({error}), ignorée ({e})"),
     }
+    None
 }
 
 /// Enregistre l'image de fond (`None` la supprime).
@@ -218,19 +241,20 @@ mod tests {
             now_ms()
         ));
         let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
         dir
     }
 
     #[test]
     fn appearance_is_saved_and_reloaded() {
         let dir = temp_dir("roundtrip");
-        let state = AppearanceState::load(&dir).unwrap();
+        let state = AppearanceState::load(&dir);
         assert_eq!(state.lock().current, Appearance::default());
 
         state.change("", |s| s.apply_preset("neon")).unwrap();
         state.change("", |s| s.save_current_as("Le mien")).unwrap();
 
-        let reloaded = AppearanceState::load(&dir).unwrap();
+        let reloaded = AppearanceState::load(&dir);
         assert!(reloaded.startup_warning.is_none());
         assert_eq!(reloaded.lock().current.preset, "neon");
         assert_eq!(reloaded.lock().saved.len(), 1);
@@ -243,7 +267,7 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join(APPEARANCE_FILE), b"{ pas du json").unwrap();
 
-        let state = AppearanceState::load(&dir).unwrap();
+        let state = AppearanceState::load(&dir);
         assert!(state.startup_warning.is_some());
         assert_eq!(state.lock().current, Appearance::default());
         let backups = fs::read_dir(&dir)
@@ -261,9 +285,20 @@ mod tests {
     }
 
     #[test]
+    fn unreadable_file_never_blocks_startup() {
+        // `apparence.json` est un dossier : ni lisible, ni renommable en fichier.
+        let dir = temp_dir("unreadable");
+        fs::create_dir_all(dir.join(APPEARANCE_FILE)).unwrap();
+        let state = AppearanceState::load(&dir);
+        assert!(state.startup_warning.is_some());
+        assert_eq!(state.lock().current, Appearance::default());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn failed_write_leaves_memory_unchanged() {
         let dir = temp_dir("failed-write");
-        let state = AppearanceState::load(&dir).unwrap();
+        let state = AppearanceState::load(&dir);
         fs::remove_dir_all(&dir).unwrap();
         let err = state
             .change("d'appliquer le préréglage", |s| s.apply_preset("nuit"))

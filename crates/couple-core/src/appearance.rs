@@ -11,7 +11,8 @@
 //! et les couleurs invalides remplacées, pour que l'affichage reste toujours
 //! utilisable.
 
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_json::{Map, Value};
 
 use crate::{Error, Result};
 
@@ -64,10 +65,12 @@ pub enum WallpaperKind {
     Image,
 }
 
-/// Tous les réglages d'apparence. Les champs absents d'un fichier ou d'un
-/// code (ancienne version de l'appli) prennent la valeur par défaut.
+/// Tous les réglages d'apparence. La lecture est tolérante (voir
+/// `From<Value>`) : un champ absent ou illisible (ancienne ou future version
+/// de l'appli, fichier modifié à la main) garde la valeur du thème par défaut
+/// sans faire perdre les autres.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
+#[serde(from = "Value")]
 pub struct Appearance {
     /// Préréglage d'origine (sert à afficher « modifié » et à réinitialiser).
     pub preset: String,
@@ -238,6 +241,63 @@ pub struct Preset {
     pub appearance: Appearance,
 }
 
+/// Copie dans `slot` la valeur de `key` si elle est lisible.
+fn take<T: DeserializeOwned>(map: &Map<String, Value>, key: &str, slot: &mut T) {
+    if let Some(value) = map.get(key) {
+        if let Ok(parsed) = serde_json::from_value(value.clone()) {
+            *slot = parsed;
+        }
+    }
+}
+
+/// Comme [`take`] pour un nombre, ramené dans les limites d'un `u16` (les
+/// bornes de chaque réglage sont appliquées ensuite par `sanitized`).
+fn take_number(map: &Map<String, Value>, key: &str, slot: &mut u16) {
+    if let Some(n) = map.get(key).and_then(Value::as_f64) {
+        if n.is_finite() {
+            *slot = n.clamp(0.0, f64::from(u16::MAX)).round() as u16;
+        }
+    }
+}
+
+impl From<Value> for Appearance {
+    fn from(value: Value) -> Self {
+        let mut a = Appearance::default();
+        let Value::Object(map) = value else {
+            return a;
+        };
+        take(&map, "preset", &mut a.preset);
+        take(&map, "accent", &mut a.accent);
+        take(&map, "accent2", &mut a.accent2);
+        take(&map, "text", &mut a.text);
+        take(&map, "glass_tint", &mut a.glass_tint);
+        take_number(&map, "glass_opacity", &mut a.glass_opacity);
+        take_number(&map, "blur", &mut a.blur);
+        take_number(&map, "saturation", &mut a.saturation);
+        take_number(&map, "border_width", &mut a.border_width);
+        take_number(&map, "border_opacity", &mut a.border_opacity);
+        take_number(&map, "radius", &mut a.radius);
+        take_number(&map, "shadow", &mut a.shadow);
+        take(&map, "shine", &mut a.shine);
+        take_number(&map, "grain", &mut a.grain);
+        take(&map, "font", &mut a.font);
+        take_number(&map, "font_scale", &mut a.font_scale);
+        take(&map, "density", &mut a.density);
+        take(&map, "wallpaper", &mut a.wallpaper);
+        if let Some(Value::Array(colors)) = map.get("wallpaper_colors") {
+            for (slot, value) in a.wallpaper_colors.iter_mut().zip(colors) {
+                if let Some(color) = value.as_str() {
+                    *slot = color.to_owned();
+                }
+            }
+        }
+        take_number(&map, "wallpaper_blur", &mut a.wallpaper_blur);
+        take_number(&map, "wallpaper_dim", &mut a.wallpaper_dim);
+        take(&map, "animate", &mut a.animate);
+        a
+    }
+}
+
 /// Un thème enregistré par l'utilisateur.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SavedTheme {
@@ -246,17 +306,38 @@ pub struct SavedTheme {
     pub appearance: Appearance,
 }
 
-/// Contenu du fichier d'apparence d'un appareil.
+/// Contenu du fichier d'apparence d'un appareil. Lecture tolérante : un thème
+/// personnel illisible est ignoré sans faire perdre les autres.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(default)]
+#[serde(from = "Value")]
 pub struct AppearanceSettings {
     pub current: Appearance,
     pub saved: Vec<SavedTheme>,
 }
 
+impl From<Value> for AppearanceSettings {
+    fn from(value: Value) -> Self {
+        let mut settings = AppearanceSettings::default();
+        let Value::Object(mut map) = value else {
+            return settings;
+        };
+        if let Some(current) = map.remove("current") {
+            settings.current = Appearance::from(current);
+        }
+        if let Some(Value::Array(saved)) = map.remove("saved") {
+            settings.saved = saved
+                .into_iter()
+                .filter_map(|theme| serde_json::from_value(theme).ok())
+                .collect();
+        }
+        settings
+    }
+}
+
 impl AppearanceSettings {
-    /// Lit le fichier JSON. Les valeurs hors bornes sont corrigées ; un JSON
-    /// illisible est une erreur (l'appli met alors le fichier de côté).
+    /// Lit le fichier JSON. Les valeurs hors bornes ou illisibles sont
+    /// corrigées ; seul un fichier qui n'est pas du JSON est une erreur
+    /// (l'appli le met alors de côté).
     pub fn from_json(bytes: &[u8]) -> Result<Self> {
         let mut settings: Self =
             serde_json::from_slice(bytes).map_err(|e| Error::InvalidTheme(e.to_string()))?;
@@ -657,18 +738,48 @@ mod tests {
 
     #[test]
     fn bad_theme_codes_are_rejected() {
-        for code in [
-            "",
-            "bonjour",
-            "EVELUCAS-THEME:",
-            "{pas du json",
-            r#"{"blur":"x"}"#,
-        ] {
+        for code in ["", "bonjour", "EVELUCAS-THEME:", "{pas du json"] {
             assert!(
                 matches!(Appearance::from_code(code), Err(Error::InvalidTheme(_))),
                 "{code:?}"
             );
         }
+    }
+
+    #[test]
+    fn unreadable_fields_keep_their_default_without_losing_the_others() {
+        // Valeurs d'une future version (police inconnue, nombre énorme ou
+        // négatif, mauvais type) : seuls ces champs reprennent leur défaut.
+        let a = Appearance::from_code(
+            r##"{"accent":"#00ff00","font":"script","blur":70000,"radius":-5,
+                "shadow":"beaucoup","density":"spacious","wallpaper_colors":["#111111",3]}"##,
+        )
+        .unwrap();
+        let d = Appearance::default();
+        assert_eq!(a.accent, "#00ff00");
+        assert_eq!(a.font, d.font);
+        assert_eq!(a.blur, 60);
+        assert_eq!(a.radius, 0);
+        assert_eq!(a.shadow, d.shadow);
+        assert_eq!(a.density, Density::Spacious);
+        assert_eq!(a.wallpaper_colors[0], "#111111");
+        assert_eq!(a.wallpaper_colors[1], d.wallpaper_colors[1]);
+    }
+
+    #[test]
+    fn one_bad_saved_theme_does_not_lose_the_others() {
+        let mut s = AppearanceSettings::default();
+        s.save_current_as("Bon").unwrap();
+        let mut json: Value = serde_json::from_slice(&s.to_json().unwrap()).unwrap();
+        json["saved"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::json!({"nom": "pas un thème"}));
+        json["current"]["font"] = "inconnue".into();
+        let reloaded = AppearanceSettings::from_json(json.to_string().as_bytes()).unwrap();
+        assert_eq!(reloaded.saved.len(), 1);
+        assert_eq!(reloaded.saved[0].name, "Bon");
+        assert_eq!(reloaded.current.font, Font::System);
     }
 
     #[test]
