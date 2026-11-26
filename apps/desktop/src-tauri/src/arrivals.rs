@@ -119,7 +119,16 @@ pub(crate) fn add_received(
         .change("d'enregistrer l'arrivée reçue", |d| {
             d.add_with_id(&arrival.id, &arrival.who, &arrival.device, arrival.at)
         })?;
-    if added.is_some() && already_rung {
+    // Même déjà connue (arrivée d'abord par la synchro), une arrivée qui a
+    // sonné sur Android ne doit plus sonner ici.
+    let present = added.is_some()
+        || state
+            .arrivals
+            .lock()
+            .list()
+            .iter()
+            .any(|a| a.id == arrival.id);
+    if present && already_rung {
         let mut settings = load_settings(state);
         if !settings.rung.contains(&arrival.id) {
             settings.rung.push(arrival.id.clone());
@@ -160,6 +169,10 @@ pub fn start(app: &AppHandle, state: Arc<AppState>) {
 
 /// Fait sonner pour les arrivées des autres pas encore signalées ici.
 fn ring_new_arrivals(app: &AppHandle, state: &AppState) {
+    // D'abord ce qu'Android a déjà fait sonner (réveil ntfy), pour ne pas
+    // sonner une deuxième fois.
+    #[cfg(mobile)]
+    crate::push::phone::ingest_received(app, state);
     let _guard = SETTINGS_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     let mut settings = load_settings(state);
     let now = now_ms();
@@ -179,6 +192,16 @@ fn ring_new_arrivals(app: &AppHandle, state: &AppState) {
     if to_ring.is_empty() {
         return;
     }
+    // Avant de sonner : Android ne sonnera pas si le réveil ntfy de la même
+    // arrivée arrive ensuite.
+    #[cfg(mobile)]
+    {
+        use tauri_plugin_geofence::GeofenceExt;
+        let ids: Vec<String> = to_ring.iter().map(|a| a.id.clone()).collect();
+        if let Err(e) = app.geofence().mark_rung(ids) {
+            eprintln!("Impossible de noter les arrivées signalées : {e}");
+        }
+    }
     for arrival in &to_ring {
         let result = app
             .notification()
@@ -194,19 +217,6 @@ fn ring_new_arrivals(app: &AppHandle, state: &AppState) {
     settings.rung = remember(&settings.rung, &to_ring, &recent);
     if let Err(e) = save_settings(state, &settings) {
         eprintln!("{e}");
-    }
-    // Pour que le téléphone ne sonne pas une deuxième fois si le réveil
-    // ntfy de la même arrivée arrive ensuite.
-    #[cfg(mobile)]
-    {
-        use tauri_plugin_geofence::GeofenceExt;
-        let ids: Vec<String> = to_ring.into_iter().map(|a| a.id).collect();
-        let app = app.clone();
-        tauri::async_runtime::spawn_blocking(move || {
-            if let Err(e) = app.geofence().mark_rung(ids) {
-                eprintln!("Impossible de noter les arrivées signalées : {e}");
-            }
-        });
     }
 }
 
@@ -320,6 +330,34 @@ mod tests {
             &["b".into(), "c".into()],
         );
         assert_eq!(kept, vec!["b".to_owned(), "c".to_owned()]);
+    }
+
+    #[test]
+    fn arrival_rung_by_android_never_rings_again() {
+        let dir = crate::store::tests::temp_dir("arrivee");
+        let state = AppState::load(&dir, "Téléphone").unwrap();
+        let now = now_ms();
+        let x = Arrival {
+            id: "x".into(),
+            who: "Lucas".into(),
+            device: "tel-lucas".into(),
+            at: now,
+        };
+        // L'arrivée est d'abord reçue par la synchro…
+        state
+            .arrivals
+            .change("", |d| d.add_with_id(&x.id, &x.who, &x.device, x.at))
+            .unwrap();
+        // … puis Android signale qu'il a déjà sonné pour elle (réveil ntfy).
+        assert!(!add_received(&state, &x, true).unwrap());
+        let rung = load_settings(&state).rung;
+        assert_eq!(rung, vec!["x".to_owned()]);
+        assert!(state
+            .arrivals
+            .lock()
+            .to_ring(&state.self_id.to_string(), &rung, now)
+            .is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

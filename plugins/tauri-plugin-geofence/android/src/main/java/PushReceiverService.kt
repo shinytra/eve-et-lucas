@@ -46,6 +46,9 @@ class PushReceiverService : PushService() {
   override fun onUnregistered(instance: String) {
     Log.w(TAG, "Plus enregistré auprès du distributeur UnifiedPush")
     GeofenceStore.setPushEndpoint(this, null)
+    // Adresse vide : l'appli la retire du document partagé, pour que les
+    // autres n'envoient plus dans le vide.
+    GeofencePlugin.notifyPushEndpoint("")
   }
 
   private fun handleMessage(content: ByteArray) {

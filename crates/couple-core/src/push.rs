@@ -104,6 +104,26 @@ impl PushDoc {
         Ok(true)
     }
 
+    /// Remplace la clé par une nouvelle et oublie l'adresse de `removed` :
+    /// à faire quand un appareil est retiré. Il garde l'ancienne clé, mais ne
+    /// reçoit plus la synchro : il ne peut ni lire les réveils suivants ni en
+    /// fabriquer qui soient acceptés.
+    pub fn rotate_key(&mut self, removed: &str) -> Result<()> {
+        let key = Aes256Gcm::generate_key(OsRng);
+        self.doc
+            .put(ROOT, KEY_PROP, BASE64.encode(key.as_slice()))?;
+        self.remove_target(removed)
+    }
+
+    /// Oublie l'adresse d'un appareil (plus joignable par ntfy).
+    pub fn remove_target(&mut self, device: &str) -> Result<()> {
+        let key = format!("{TARGET_PREFIX}{device}");
+        if self.doc.get(ROOT, key.as_str())?.is_some() {
+            self.doc.delete(ROOT, key.as_str())?;
+        }
+        Ok(())
+    }
+
     /// Enregistre (ou remplace) l'adresse d'un appareil.
     pub fn set_target(&mut self, device: &str, endpoint: &str, now_ms: i64) -> Result<()> {
         let endpoint = endpoint.trim();
@@ -320,6 +340,30 @@ mod tests {
         b.merge(&mut a).unwrap();
         assert!(a.key().is_some());
         assert_eq!(a.key(), b.key());
+    }
+
+    #[test]
+    fn removed_device_loses_the_key() {
+        let mut pc = PushDoc::new();
+        pc.ensure_key().unwrap();
+        pc.set_target("pc", "https://ntfy.sh/abc", 1).unwrap();
+        pc.set_target("vole", "https://ntfy.sh/upVOLE", 1).unwrap();
+        // Le téléphone volé a une copie de tout.
+        let stolen = pc.fork();
+        let old_key = stolen.key().unwrap();
+        pc.rotate_key("vole").unwrap();
+        let new_key = pc.key().unwrap();
+        assert_ne!(old_key, new_key);
+        assert!(pc.target("vole").is_none());
+        assert!(pc.target("pc").is_some());
+        // Un message fabriqué avec l'ancienne clé est refusé.
+        let forged = seal(&old_key, &message()).unwrap();
+        assert!(open(&new_key, &forged).is_err());
+        // Les autres appareils apprennent la nouvelle clé par la synchro.
+        let mut phone = PushDoc::new();
+        phone.merge(&mut pc).unwrap();
+        assert_eq!(phone.key(), Some(new_key));
+        pc.remove_target("inconnu").unwrap();
     }
 
     #[test]

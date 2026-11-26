@@ -36,7 +36,9 @@ class GeofenceReceiver : BroadcastReceiver() {
 
     val ring = GeofenceStore.ringOnArrival(context)
     val config = GeofenceStore.pushConfig(context)
+    // Sans prénom, les autres refuseraient le message : inutile de l'envoyer.
     val push = PushCrypto.decodeKey(config.key) != null &&
+      config.who.isNotBlank() &&
       PushSender.validTargets(config.targets).isNotEmpty()
     if (!ring && !push) return
 
