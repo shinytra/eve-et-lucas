@@ -1,0 +1,41 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Position précise : indispensable au géofencing. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Android 10+ : détecter l'arrivée quand l'appli est fermée. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- Android 13+ : afficher la notification d'arrivée. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Les géofences sont effacées au redémarrage : on les réenregistre. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Réveil par ntfy : envoi de l'arrivée chiffrée aux autres appareils. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application>
+        <receiver
+            android:name="fr.eveetlucas.geofence.GeofenceReceiver"
+            android:exported="false" />
+        <receiver
+            android:name="fr.eveetlucas.geofence.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <!--
+          Réception UnifiedPush (appli ntfy). Le récepteur exporté est fourni
+          par la bibliothèque org.unifiedpush.android:connector ; il transmet
+          les évènements à ce service, qui reste privé. Tout message non
+          déchiffrable avec la clé commune est ignoré.
+        -->
+        <service
+            android:name="fr.eveetlucas.geofence.PushReceiverService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="org.unifiedpush.android.connector.PUSH_EVENT" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

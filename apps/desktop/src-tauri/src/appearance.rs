@@ -14,7 +14,8 @@ use couple_core::{Appearance, AppearanceSettings};
 use serde::Serialize;
 use tauri::State;
 
-use super::{now_ms, write_atomic};
+use super::now_ms;
+use crate::store::write_atomic;
 
 const APPEARANCE_FILE: &str = "apparence.json";
 /// L'image de fond est gardée à part (data URL), pour que le fichier des

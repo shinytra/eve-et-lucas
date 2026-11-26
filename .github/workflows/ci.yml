@@ -8,10 +8,18 @@ on:
 permissions:
   contents: read
 
+# Sans informations de débogage : le build complet (Tauri + iroh + iroh-blobs)
+# dépasse sinon l'espace disque du serveur de GitHub.
+env:
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+
 jobs:
   rust:
     runs-on: ubuntu-latest
     steps:
+      - name: Libérer de l'espace disque (SDK préinstallés inutiles ici)
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift && df -h /
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Dépendances système de Tauri (Linux)
         run: |

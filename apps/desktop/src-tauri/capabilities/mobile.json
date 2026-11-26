@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "Permissions propres au téléphone : scanner le QR code d'appairage, détecter l'arrivée à la maison.",
+  "windows": ["main"],
+  "platforms": ["android", "iOS"],
+  "permissions": ["barcode-scanner:default", "geofence:default"]
+}

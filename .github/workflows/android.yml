@@ -1,0 +1,47 @@
+name: Android
+
+# Construit l'APK de test (debug, ARM 64 bits) pour les téléphones.
+# Le projet Android (`gen/android`) n'est pas versionné : il est régénéré ici.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: android
+      # Gradle rappelle la CLI Tauri par « npm run tauri » : elle doit être
+      # installée dans src-tauri (version épinglée par package-lock.json).
+      - name: Installer la CLI Tauri
+        working-directory: apps/desktop/src-tauri
+        run: npm ci
+      - name: Générer le projet Android
+        working-directory: apps/desktop/src-tauri
+        run: NDK_HOME="$ANDROID_NDK_LATEST_HOME" npm run tauri -- android init --ci
+      - name: Construire l'APK
+        working-directory: apps/desktop/src-tauri
+        run: NDK_HOME="$ANDROID_NDK_LATEST_HOME" npm run tauri -- android build --debug --apk --target aarch64 --ci
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: eve-et-lucas-android-debug
+          path: apps/desktop/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 14

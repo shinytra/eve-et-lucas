@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Thème sombre : fond gris foncé légèrement transparent. -->
+    <color name="home_widget_background">#E6202124</color>
+    <color name="home_widget_text_primary">#FFFFFFFF</color>
+    <color name="home_widget_text_secondary">#B3FFFFFF</color>
+    <color name="home_widget_accent">#FFF48FB1</color>
+    <color name="home_widget_late">#FFFF8A80</color>
+</resources>

@@ -12,7 +12,7 @@ use automerge::{transaction::Transactable, AutoCommit, ReadDoc, ROOT};
 use autosurgeon::{hydrate_prop, reconcile_prop, Hydrate, Reconcile};
 use serde::{Deserialize, Serialize};
 
-use crate::{Error, Result};
+use crate::{sync::Syncable, Error, Result};
 
 /// Une note partagée.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hydrate, Reconcile)]
@@ -158,6 +158,12 @@ impl NotesDoc {
     }
 }
 
+impl Syncable for NotesDoc {
+    fn automerge(&mut self) -> &mut AutoCommit {
+        &mut self.doc
+    }
+}
+
 fn clean(title: &str, body: &str) -> Result<(String, String)> {
     let title = title.trim();
     let body = body.trim_end();
@@ -170,6 +176,7 @@ fn clean(title: &str, body: &str) -> Result<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::SyncState;
 
     /// Simule un deuxième appareil qui part du même état (nouvel identifiant
     /// d'appareil, contrairement à `clone`).
@@ -353,6 +360,26 @@ mod tests {
         // La suppression l'emporte, des deux côtés.
         assert!(eve.list().unwrap().is_empty());
         assert!(lucas.list().unwrap().is_empty());
+    }
+
+    #[test]
+    fn sync_protocol_converges_like_merge() {
+        let mut eve = NotesDoc::new();
+        eve.add("Eve", "De Eve", "", 1).unwrap();
+        let mut lucas = NotesDoc::new();
+        lucas.add("Lucas", "De Lucas", "", 1).unwrap();
+        crate::sync::tests::sync_pair(&mut eve, &mut lucas);
+        assert_eq!(eve.list().unwrap().len(), 2);
+        assert_eq!(eve.list().unwrap(), lucas.list().unwrap());
+    }
+
+    #[test]
+    fn corrupt_sync_message_is_an_error() {
+        let mut doc = NotesDoc::new();
+        let mut state = SyncState::new();
+        assert!(doc
+            .receive_sync_message(&mut state, b"n'importe quoi")
+            .is_err());
     }
 
     #[test]

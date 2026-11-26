@@ -304,8 +304,22 @@ form {
   gap: calc(var(--gap) * 0.6);
 }
 
-#note-form {
+/* Chaque écran (tâches, notes, arrivée, fichiers, appareils) est un panneau
+   de verre ; ses éléments sont des cartes plus claires à l'intérieur (un
+   verre dans un verre ne floute pas correctement dans WebKit). */
+main > section {
+  display: grid;
+  gap: calc(var(--gap) * 0.85);
+  margin-bottom: var(--gap);
   padding: var(--gap);
+}
+
+main > section > h2 {
+  margin: 0;
+}
+
+main > section > ul {
+  margin: 0;
 }
 
 textarea {
@@ -341,7 +355,8 @@ button:disabled {
   cursor: default;
 }
 
-button.principal {
+button.principal,
+button[type="submit"] {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   border-color: transparent;
   color: var(--accent-text);
@@ -375,6 +390,9 @@ button.icone {
 
 .note {
   padding: calc(var(--gap) * 0.85) var(--gap);
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--field-bg);
 }
 
 .note h3 {
@@ -397,8 +415,8 @@ button.icone {
 
 #empty {
   margin: 0;
-  padding: var(--gap);
   color: var(--muted);
+  font-size: 0.85rem;
 }
 
 /* ---------- Écran des réglages ---------- */
@@ -772,4 +790,227 @@ input[type="color"] {
 
 .interrupteur input:checked::after {
   transform: translateX(20px);
+}
+
+/* ---------- Écrans des fonctionnalités ---------- */
+
+.devices {
+  display: grid;
+  gap: 12px;
+}
+
+.devices label {
+  font-weight: 600;
+}
+
+#devices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.device {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--field-bg);
+}
+
+.qr {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  background: #ffffff;
+  border-radius: 12px;
+}
+
+.qr svg {
+  width: min(260px, 100%);
+  height: auto;
+}
+
+#devices-error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fields label {
+  flex: 1 1 140px;
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+#tasks {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.task {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--field-bg);
+}
+
+.task input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.task .text {
+  flex: 1 1 160px;
+  display: grid;
+  min-width: 0;
+}
+
+.task .title {
+  overflow-wrap: anywhere;
+}
+
+.task .meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.task.done .title {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.task.late .meta {
+  color: var(--danger);
+}
+
+.task .actions {
+  margin-left: auto;
+}
+
+#tasks-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+#task-error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.files {
+  display: grid;
+  gap: 12px;
+}
+
+#files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.file {
+  display: grid;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--field-bg);
+}
+
+.file .name {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.file .meta,
+#file-status,
+#files-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.file img {
+  max-width: 100%;
+  max-height: 240px;
+  border-radius: 8px;
+  justify-self: start;
+}
+
+#file-error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.home {
+  display: grid;
+  gap: 12px;
+}
+
+.home .meta,
+#arrivals li {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+#home-phone {
+  display: grid;
+  gap: 8px;
+}
+
+#home-phone select {
+  width: auto;
+  margin-left: 8px;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.check input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+#arrivals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+#home-error {
+  margin: 0;
+  color: var(--danger);
 }

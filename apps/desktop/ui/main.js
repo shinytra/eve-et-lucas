@@ -64,7 +64,7 @@ function render(notes) {
   list.replaceChildren(
     ...notes.map((note) => {
       const li = document.createElement("li");
-      li.className = "note verre";
+      li.className = "note";
 
       const h3 = document.createElement("h3");
       h3.textContent = note.title || "Sans titre";
@@ -152,3 +152,11 @@ cancelButton.addEventListener("click", resetForm);
   }
   await refresh();
 })();
+
+// Une synchro a apporté des changements d'un autre appareil.
+window.__TAURI__.event?.listen("docs-changed", (event) => {
+  if (event.payload?.includes("notes")) refresh();
+});
+
+// Problème survenu en tâche de fond (notifications refusées…).
+window.__TAURI__.event?.listen("notice", (event) => showError(String(event.payload)));

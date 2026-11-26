@@ -1,0 +1,18 @@
+[package]
+name = "tauri-plugin-geofence"
+version = "0.1.0"
+description = "Détection de l'arrivée à la maison (géofencing Android), même appli fermée."
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+# Exigé par `tauri-plugin` : doit être identique au nom du crate.
+links = "tauri-plugin-geofence"
+
+[build-dependencies]
+tauri-plugin = { version = "2.7", features = ["build"] }
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tauri = { version = "2.12", default-features = false }

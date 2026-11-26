@@ -1,9 +1,10 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions de la fenêtre principale.",
+  "description": "Permissions de la fenêtre principale. Les notifications sont envoyées par Rust ; l'interface peut seulement savoir si elles sont autorisées (le script du plugin le vérifie au chargement).",
   "windows": ["main"],
   "permissions": [
-    "core:default"
+    "core:default",
+    "notification:allow-is-permission-granted"
   ]
 }

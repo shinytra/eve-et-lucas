@@ -6,9 +6,18 @@ Appli de couple pour Eve et Lucas, en Rust, pour Android et PC. Lucas valide cha
 
 - **Tauri 2** : un seul code pour PC (Windows/Linux) et Android. Interface web dans `apps/desktop/ui/` (HTML/CSS/JS sans étape de build pour l'instant), cœur en Rust.
 - **`crates/couple-core`** : toutes les données et règles métier. Ne dépend ni de Tauri ni du réseau. Chaque fonctionnalité a son propre document **Automerge** (notes, tâches, widgets…), dont la racine est une table `id -> élément` avec des identifiants UUID v4. Ainsi deux appareils qui n'ont jamais communiqué peuvent fusionner sans rien perdre (voir `notes.rs`).
-- **`apps/desktop/src-tauri`** : plomberie uniquement. Commandes Tauri qui appellent le cœur, enregistrement des documents dans le dossier de données de l'appli (écriture atomique : fichier temporaire puis renommage).
-- **Synchro (à venir)** : iroh 1.0 entre les trois pairs (téléphone de Lucas, téléphone d'Eve, PC). Le PC, allumé environ 95 % du temps, est le pair « boîte aux lettres » qui garde une copie de tout et héberge ntfy pour réveiller les téléphones. PC éteint : les téléphones se synchronisent directement entre eux.
-- **Kotlin (à venir)** : uniquement ce que Rust ne peut pas faire sur Android (géofencing en arrière-plan, widgets Glance, service au premier plan), sous forme de plugins Tauri maison dans `plugins/`. Jamais de code à la main dans `gen/android` (régénéré).
+- **`apps/desktop/src-tauri`** : plomberie uniquement (`store.rs` : documents sur disque et trait `Store` ; `sync.rs` : nœud iroh en tâche de fond, commandes d'appairage ; `reminders.rs` : notifications des tâches échues via `tauri-plugin-notification` : « en cours » sur téléphone (de retour 15 min après si balayées) et confiées à Android à l'avance, répétées toutes les heures sur PC). Ce qui est propre au PC (icône, lancement au démarrage, instance unique) est dans `src/desktop.rs`, compilé seulement avec `#[cfg(desktop)]` ; les plugins correspondants sont des dépendances réservées au PC dans `Cargo.toml`. Commandes Tauri qui appellent le cœur, enregistrement des documents dans le dossier de données de l'appli (écriture atomique : fichier temporaire puis renommage).
+- **Apparence** : thème « verre dépoli » propre à chaque appareil (pas d'Automerge) : `couple_core::appearance` (8 préréglages, bornes, nettoyage des valeurs, codes de thème `EVELUCAS-THEME:`), fichiers `apparence.json` et `fond-ecran.txt` (`src/appearance.rs`), variables CSS posées par `ui/appearance.js`. Chaque écran est un `section.verre` ; ses éléments sont des cartes en `var(--field-bg)` (pas de verre dans le verre).
+- **`crates/couple-sync`** : synchro P2P avec iroh entre les trois pairs (téléphone de Lucas, téléphone d'Eve, PC). Le PC, allumé environ 95 % du temps, est le pair « boîte aux lettres » qui garde une copie de tout. PC éteint : les téléphones se synchronisent directement entre eux.
+  - Identité d'un appareil = sa clé iroh (`device.key` dans le dossier de données). La liste des appareils autorisés est elle-même un document Automerge synchronisé (`DevicesDoc`) : un appareil appairé avec le PC est appris par les autres.
+  - Appairage (ALPN `eve-et-lucas/pair/1`) : code `EL1:…` (QR code) à usage unique, valable 10 min, contenant l'adresse de l'hôte et un secret. Synchro (ALPN `eve-et-lucas/sync/1`) : refusée à tout appareil absent de `DevicesDoc`, un flux par document, protocole de synchro d'Automerge.
+  - L'appli fournit le stockage via le trait `Store`. Pour un nouveau document partagé : l'ajouter à `doc_names()` et à `generate`/`receive` dans `apps/desktop/src-tauri/src/store.rs`.
+  - Fichiers : la liste est le document `files` (`FilesDoc`, nom nettoyé : jamais de dossier), le contenu est rangé par empreinte BLAKE3 avec `iroh-blobs` (dossier `fichiers/`, ménage toutes les 10 min des contenus sans étiquette `fichier-<empreinte>`). Seuls les appareils de `DevicesDoc` peuvent en demander, personne ne peut en pousser. Après chaque synchro, une tâche à part (pour ne pas retarder les documents) télécharge ce que `Store::wanted_blobs` demande (tout sur PC, les images de 10 Mo au plus sur téléphone, le reste à la demande), puis libère les contenus des fichiers supprimés ailleurs (`retain_blobs`). Envoi depuis l'interface par morceaux en base64 (`upload_start`/`upload_chunk`/`upload_finish`) : Android ne transmet pas de binaire brut à Rust. Aperçus en `blob:` (autorisé dans `img-src`, images matricielles seulement). Enregistrement : `disk_name` (noms réservés Windows, 200 octets) ; pas encore sur Android (dossier privé de l'appli, il faudra MediaStore).
+  - Réseau `Online` (relais et annuaire DNS publics de n0, chiffré de bout en bout, rien n'est stocké) dans l'appli ; `Local` (connexions directes) dans les tests.
+- **Kotlin** : uniquement ce que Rust ne peut pas faire sur Android (géofencing en arrière-plan, widget d'écran d'accueil, service au premier plan), sous forme de plugins Tauri maison dans `plugins/`. Jamais de code à la main dans `gen/android` (régénéré).
+  - `plugins/tauri-plugin-geofence` : zone « maison » de 150 m (Google Play Services), réenregistrée au redémarrage du téléphone. Chaque entrée est notée par Android même appli fermée ; l'appli les lit (`peek_arrivals`), les ajoute au document `arrivals` (`ArrivalsDoc`, anti-rebond de 5 min par appareil, ménage après 30 jours) puis les confirme (`ack_arrivals`) : rien n'est perdu si l'enregistrement échoue. Les autres appareils sonnent une fois par arrivée de moins de 15 min (identifiants déjà signalés dans `arrivee.json`). L'identifiant d'une arrivée est créé par Kotlin (`add_with_id`), le même dans le réveil ntfy et dans la synchro.
+  - Réveil par ntfy.sh (`couple_core::push`, `src/push.rs`) : document `push` = clé AES-256-GCM commune (créée par le premier appareil, ne voyage que par iroh) + adresse ntfy de chaque appareil (`target:<id>`, https seulement). Message `EL1.` + base64(nonce ‖ chiffré ‖ tag), clair JSON `{"v":1,"kind":"arrival",id,who,device,at}` ; même format en Kotlin (`PushCrypto.kt`, vecteur de test commun dans `push.rs`). Téléphone : UnifiedPush (`org.unifiedpush.android:connector`, appli ntfy à installer) ; Kotlin envoie le réveil en entrant dans la zone et sonne à la réception, appli fermée ; `mark_rung` / `peek_received` évitent la double sonnerie. PC : sujet aléatoire `el-<32 hex>` écouté en continu (`reqwest`, `?since=15m` au démarrage). Un message illisible ou falsifié est ignoré.
+  - `plugins/tauri-plugin-home-widget` : widget d'écran d'accueil (AppWidgetProvider + RemoteViews plutôt que Glance : le projet Android généré par Tauri n'a pas le plugin compilateur Compose). L'appli lui envoie le résumé calculé par `couple_core::widget::snapshot` (tâches à faire, dernière arrivée de moins de 12 h) à chaque changement et au moins toutes les minutes (`src/widget.rs`). Une case cochée sur le widget est notée par Android même appli fermée, puis appliquée (`apply_action`, au nom choisi dans « Arrivée à la maison ») et confirmée (`peek_actions`/`ack_actions`).
 
 ## Commandes
 
@@ -19,9 +28,13 @@ cargo test --workspace                  # tests du cœur
 cargo run -p eve-et-lucas-desktop       # lance l'appli PC
 cargo run -p eve-et-lucas-desktop --features mcp-bridge   # idem, pilotable par le serveur MCP Tauri
 cargo tauri dev --features mcp-bridge   # idem, avec la CLI Tauri (cargo install tauri-cli --version "^2")
-cd apps/desktop/e2e && npm install && npm test   # test de bout en bout via le MCP Tauri (appli lancée avec --features mcp-bridge)
-cargo tauri android init                # plus tard : génère le projet Android
-cargo tauri android dev
+cd apps/desktop/e2e && npm install && npm test   # notes + tâches + fichiers de bout en bout via le MCP Tauri (appli lancée avec --features mcp-bridge)
+(cd apps/desktop/e2e && npm run test:apparence)   # préréglages, réglages, thèmes, image de fond + captures dans captures/
+cargo build -p couple-sync --example peer && (cd apps/desktop/e2e && node pairing.mjs)   # appairage + synchro avec un faux téléphone
+EVE_ET_LUCAS_DATA_DIR=/tmp/essai cargo run -p eve-et-lucas-desktop   # appli avec un autre dossier de données
+cd apps/desktop/src-tauri && npm ci && npm run tauri -- android init   # (ou cargo tauri android init) génère gen/android (non versionné), besoin du SDK + NDK (NDK_HOME)
+cargo tauri android dev                 # appli sur l'émulateur ou un téléphone branché
+cargo tauri android build --debug --apk --target aarch64   # APK de test ; la CI le fait (workflow « Android »)
 ```
 
 Sous Linux, Tauri a besoin de `libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev`.
@@ -34,8 +47,11 @@ Sous Linux, Tauri a besoin de `libwebkit2gtk-4.1-dev libayatana-appindicator3-de
 - Une entrée illisible venue d'un autre appareil est ignorée, jamais bloquante. Un fichier local illisible est mis de côté (`.corrompu-<date>`) avec un avertissement, sans empêcher l'appli de démarrer.
 - Une modification se fait sur une copie du document, enregistrée (avec `sync_all`) avant de remplacer celle en mémoire.
 - Les dates sont des millisecondes Unix (`i64`) passées en paramètre au cœur, pour des tests déterministes.
+- Formulaires de l'interface en `novalidate` : la validation native de WebKitGTK peut bloquer l'envoi sans message (vu avec `datetime-local`). Les règles sont vérifiées dans le cœur.
+- Les fichiers `ui/` sont intégrés au binaire à la compilation : recompiler avant un test de bout en bout.
 - CSP : `csp` (versions distribuées) reste stricte. `devCsp` autorise `unsafe-inline`/`unsafe-eval` uniquement pour que le pont MCP injecte ses scripts en développement. Jamais de script inline dans `ui/`.
 - L'interface doit rester utilisable à 360 px de large (elle servira telle quelle sur Android).
+- Code réservé au téléphone : `#[cfg(mobile)]` côté Rust, dépendance sous `[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]`, permissions dans `capabilities/mobile.json`. Le réseau de ce conteneur bloque le SDK Android : l'APK est construit et vérifié par la CI.
 - Avant un commit : skill `verifier` (fmt, clippy, tests). La CI GitHub fait la même chose.
 
 ## Outillage Claude Code du dépôt
@@ -62,10 +78,12 @@ Plutôt que de réécrire, s'inspirer de (ou dépendre de) :
 
 ## Feuille de route
 
-1. ✅ Base Tauri 2 + notes partagées en local (cette étape).
-2. Appli PC en tâche de fond (icône de barre des tâches, lancement au démarrage) + synchro iroh + appairage par QR code.
-3. Appli Android avec la même base.
-4. Tâches communes et rappels (notifications).
-5. Partage de fichiers P2P (iroh-blobs).
-6. Sonnerie à l'arrivée (géofencing, plugin Kotlin).
-7. Widgets interactifs partagés (Glance, plugin Kotlin), réveil par ntfy.
+1. ✅ Base Tauri 2 + notes partagées en local.
+2. a. ✅ Appli PC en tâche de fond : icône dans la barre des tâches, fermer la fenêtre la cache, lancement au démarrage (option du menu de l'icône, démarre fenêtre cachée), une seule instance.
+   b. ✅ Synchro iroh entre appareils + appairage par QR code (écran « Appareils »).
+3. ✅ Appli Android avec la même base (APK construit par la CI, scan du QR code d'appairage ; reste à essayer sur vos téléphones).
+4. ✅ Tâches communes et rappels (notifications).
+5. ✅ Partage de fichiers P2P (iroh-blobs).
+6. ✅ Sonnerie à l'arrivée (géofencing, plugin Kotlin ; reste à essayer sur vos téléphones).
+7. a. ✅ Widget d'écran d'accueil (tâches à cocher, dernière arrivée ; reste à essayer sur vos téléphones).
+   b. ✅ Réveil des appareils par ntfy, chiffré (reste à essayer sur vos téléphones, avec l'appli ntfy).

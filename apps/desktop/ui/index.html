@@ -49,20 +49,123 @@
     </header>
 
     <main>
-      <form id="note-form" class="verre" autocomplete="off">
-        <input id="title" placeholder="Titre" maxlength="200" />
-        <textarea id="body" placeholder="Écris une note…" rows="4"></textarea>
-        <div class="actions">
-          <button type="button" id="cancel" hidden>Annuler</button>
-          <button type="submit" id="save" class="principal">Ajouter</button>
-        </div>
-        <p id="error" role="alert" hidden></p>
-      </form>
+      <section aria-labelledby="tasks-title" class="tasks verre">
+        <h2 id="tasks-title">Tâches</h2>
+        <form id="task-form" autocomplete="off" novalidate>
+          <input id="task-title" placeholder="Nouvelle tâche" maxlength="200" aria-label="Tâche" />
+          <div class="fields">
+            <label>
+              Pour
+              <select id="task-assignee">
+                <option value="">Tous les deux</option>
+                <option>Lucas</option>
+                <option>Eve</option>
+              </select>
+            </label>
+            <label>
+              Rappel
+              <input id="task-due" type="datetime-local" />
+            </label>
+          </div>
+          <div class="actions">
+            <button type="button" id="task-cancel" hidden>Annuler</button>
+            <button type="submit" id="task-save">Ajouter</button>
+          </div>
+          <p id="task-error" role="alert" hidden></p>
+        </form>
+        <p id="tasks-empty" class="meta" hidden>Aucune tâche pour l'instant.</p>
+        <ul id="tasks"></ul>
+      </section>
 
-      <section aria-labelledby="notes-title">
+      <section aria-labelledby="notes-title" class="notes verre">
         <h2 id="notes-title">Notes partagées</h2>
-        <p id="empty" class="verre" hidden>Aucune note pour l'instant.</p>
+        <form id="note-form" autocomplete="off" novalidate>
+          <input id="title" placeholder="Titre" maxlength="200" />
+          <textarea id="body" placeholder="Écris une note…" rows="4"></textarea>
+          <div class="actions">
+            <button type="button" id="cancel" hidden>Annuler</button>
+            <button type="submit" id="save">Ajouter</button>
+          </div>
+          <p id="error" role="alert" hidden></p>
+        </form>
+        <p id="empty" hidden>Aucune note pour l'instant.</p>
         <ul id="notes"></ul>
+      </section>
+
+      <section aria-labelledby="home-title" class="home verre">
+        <h2 id="home-title">Arrivée à la maison</h2>
+        <p class="meta">Quand l'un de vous approche de la maison, son téléphone prévient les autres appareils, qui sonnent. Pour qu'ils sonnent même appli fermée, installe l'appli ntfy (Play Store ou F-Droid) sur chaque téléphone : le message passe par ntfy.sh, chiffré, et le PC l'écoute aussi.</p>
+        <div id="home-phone" hidden>
+          <label>
+            Ce téléphone est celui de
+            <select id="home-who">
+              <option value="">Choisir…</option>
+              <option>Lucas</option>
+              <option>Eve</option>
+            </select>
+          </label>
+          <p id="home-state" class="meta"></p>
+          <label class="check">
+            <input id="home-ring" type="checkbox" />
+            Sonner aussi sur ce téléphone en arrivant
+          </label>
+          <div class="actions">
+            <button type="button" id="home-clear" class="danger" hidden>Ne plus surveiller</button>
+            <button type="button" id="home-set">Je suis à la maison : enregistrer ici</button>
+          </div>
+        </div>
+        <p id="home-error" role="alert" hidden></p>
+        <ul id="arrivals"></ul>
+      </section>
+
+      <section aria-labelledby="files-title" class="files verre">
+        <h2 id="files-title">Fichiers partagés</h2>
+        <div class="actions">
+          <input id="file-input" type="file" multiple hidden />
+          <button type="button" id="file-share">Partager un fichier</button>
+        </div>
+        <p id="file-status" class="meta" hidden></p>
+        <p id="file-error" role="alert" hidden></p>
+        <p id="files-empty" class="meta" hidden>Aucun fichier pour l'instant.</p>
+        <ul id="files"></ul>
+      </section>
+
+      <section aria-labelledby="devices-title" class="devices verre">
+        <h2 id="devices-title">Appareils</h2>
+        <p id="sync-status" class="meta">Synchro en cours de démarrage…</p>
+        <ul id="devices"></ul>
+        <div class="actions">
+          <button type="button" id="sync-now">Synchroniser maintenant</button>
+          <button type="button" id="pair-start">Appairer un appareil</button>
+        </div>
+
+        <div id="pairing" hidden>
+          <p>Sur l'autre appareil, choisis « Rejoindre » puis scanne ce QR code ou colle le code. Il est valable 10 minutes et ne sert qu'une fois.</p>
+          <div id="pair-qr" class="qr"></div>
+          <textarea id="pair-code" rows="3" readonly aria-label="Code d'appairage"></textarea>
+          <div class="actions">
+            <button type="button" id="pair-copy">Copier le code</button>
+            <button type="button" id="pair-cancel">Fermer</button>
+          </div>
+        </div>
+
+        <form id="join-form" autocomplete="off">
+          <label for="join-code">Rejoindre avec un code</label>
+          <textarea id="join-code" rows="2" placeholder="EL1:…"></textarea>
+          <div class="actions">
+            <button type="button" id="join-scan" hidden>Scanner le QR code</button>
+            <button type="submit" id="join-submit">Rejoindre</button>
+          </div>
+        </form>
+
+        <form id="rename-form" autocomplete="off">
+          <label for="device-name">Nom de cet appareil</label>
+          <input id="device-name" maxlength="60" />
+          <div class="actions">
+            <button type="submit">Renommer</button>
+          </div>
+        </form>
+        <p id="devices-error" role="alert" hidden></p>
       </section>
     </main>
 
@@ -94,7 +197,7 @@
           <h3>Mes thèmes</h3>
           <p id="saved-empty" class="aide">Aucun thème enregistré. Personnalise l'apparence puis donne-lui un nom.</p>
           <ul id="saved" class="liste-themes"></ul>
-          <form id="save-theme" class="ligne" autocomplete="off">
+          <form id="save-theme" class="ligne" autocomplete="off" novalidate>
             <input id="theme-name" placeholder="Nom du thème" maxlength="40" aria-label="Nom du thème" />
             <button type="submit" class="principal">Enregistrer</button>
           </form>
@@ -124,5 +227,9 @@
     </aside>
 
     <script src="main.js"></script>
+    <script src="tasks.js"></script>
+    <script src="files.js"></script>
+    <script src="arrivals.js"></script>
+    <script src="devices.js"></script>
   </body>
 </html>

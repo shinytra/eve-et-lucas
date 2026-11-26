@@ -5,20 +5,54 @@
 //! l'appli Android et, plus tard, par la synchro iroh.
 
 pub mod appearance;
+pub mod arrivals;
+pub mod devices;
+pub mod files;
 pub mod notes;
+pub mod push;
+pub mod sync;
+pub mod tasks;
+pub mod widget;
 
 pub use appearance::{Appearance, AppearanceSettings};
+pub use arrivals::{Arrival, ArrivalsDoc};
+pub use devices::{Device, DevicesDoc};
+pub use files::{FilesDoc, SharedFile};
 pub use notes::{Note, NotesDoc};
+pub use push::{PushDoc, PushMessage};
+pub use sync::{SyncState, Syncable};
+pub use tasks::{Task, TasksDoc};
+pub use widget::{WidgetAction, WidgetData};
 
 /// Erreurs du cœur.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("adresse de réveil invalide (https uniquement, 500 caractères au plus)")]
+    InvalidEndpoint,
+    #[error("message de réveil illisible ou falsifié")]
+    InvalidPush,
     #[error("la note {0} n'existe pas")]
     NoteNotFound(String),
     #[error("une note doit avoir un titre ou un contenu")]
     EmptyNote,
-    #[error("une note doit avoir un auteur")]
+    #[error("la tâche {0} n'existe pas")]
+    TaskNotFound(String),
+    #[error("une tâche doit avoir un titre")]
+    EmptyTask,
+    #[error("le titre d'une tâche ne doit pas dépasser {0} caractères")]
+    TaskTooLong(usize),
+    #[error("le fichier {0} n'existe pas")]
+    FileNotFound(String),
+    #[error("un fichier partagé ne doit pas dépasser {0} Mo")]
+    FileTooLarge(u64),
+    #[error("fichier invalide : {0}")]
+    InvalidFile(String),
+    #[error("il manque le prénom")]
     MissingAuthor,
+    #[error("appareil invalide : {0}")]
+    InvalidDevice(String),
+    #[error("message de synchro illisible : {0}")]
+    SyncMessage(String),
     #[error("code de thème invalide : {0}")]
     InvalidTheme(String),
     #[error("le préréglage {0} n'existe pas")]
