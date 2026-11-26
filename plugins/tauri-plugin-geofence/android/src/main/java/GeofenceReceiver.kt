@@ -22,7 +22,7 @@ class GeofenceReceiver : BroadcastReceiver() {
     if (event.geofenceTransition != Geofence.GEOFENCE_TRANSITION_ENTER) return
 
     val at = System.currentTimeMillis()
-    // D'abord enregistrer : c'est ce que l'appli relira avec `take_arrivals`.
+    // D'abord enregistrer : c'est ce que l'appli relira avec `peek_arrivals`.
     GeofenceStore.addArrival(context, at)
     ArrivalNotifier.show(context)
     GeofencePlugin.notifyArrival(at)

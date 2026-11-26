@@ -85,8 +85,9 @@
     $("home-phone").hidden = false;
     try {
       const who = await invoke("arrival_person");
+      // Pas de choix par défaut : une arrivée au mauvais prénom ferait
+      // croire à l'autre que la mauvaise personne arrive.
       if (who) $("home-who").value = who;
-      else await invoke("set_arrival_person", { who: $("home-who").value });
     } catch (e) {
       showError(String(e));
     }
@@ -97,6 +98,7 @@
 
     $("home-who").addEventListener("change", async () => {
       showError(null);
+      if (!$("home-who").value) return;
       try {
         await invoke("set_arrival_person", { who: $("home-who").value });
       } catch (e) {
@@ -123,6 +125,9 @@
       button.disabled = true;
       showError(null);
       try {
+        if (!$("home-who").value) {
+          throw new Error("Choisis d'abord à qui est ce téléphone.");
+        }
         await ensurePermissions();
         showError(null);
         const pos = await invoke("plugin:geofence|current_position");

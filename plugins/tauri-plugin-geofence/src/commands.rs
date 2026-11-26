@@ -1,7 +1,7 @@
 //! Commandes appelables depuis l'interface (`plugin:geofence|…`).
 //!
 //! Toutes `async` : sur Android, l'appel au Kotlin est bloquant et ne doit pas
-//! occuper le fil principal. `take_arrivals` n'est volontairement pas exposée :
+//! occuper le fil principal. `peek_arrivals` et `ack_arrivals` ne sont volontairement pas exposées :
 //! c'est le code Rust de l'appli qui traite les arrivées.
 
 use tauri::{command, AppHandle, Runtime, State};

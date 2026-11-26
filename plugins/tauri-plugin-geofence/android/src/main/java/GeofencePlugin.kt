@@ -37,6 +37,11 @@ class RingArgs {
 }
 
 @InvokeArg
+class AckArgs {
+  var upTo: Long = 0L
+}
+
+@InvokeArg
 class PermissionsArgs {
   var permissions: List<String>? = null
 }
@@ -153,9 +158,16 @@ class GeofencePlugin(private val activity: Activity) : Plugin(activity) {
   }
 
   @Command
-  fun takeArrivals(invoke: Invoke) {
+  fun ackArrivals(invoke: Invoke) {
+    val args = invoke.parseArgs(AckArgs::class.java)
+    GeofenceStore.ackArrivals(activity, args.upTo)
+    invoke.resolve()
+  }
+
+  @Command
+  fun peekArrivals(invoke: Invoke) {
     val arrivals = JSArray()
-    for (at in GeofenceStore.takeArrivals(activity)) arrivals.put(at)
+    for (at in GeofenceStore.peekArrivals(activity)) arrivals.put(at)
     val result = JSObject()
     result.put("arrivals", arrivals)
     invoke.resolve(result)

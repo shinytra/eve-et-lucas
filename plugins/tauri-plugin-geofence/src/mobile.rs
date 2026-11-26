@@ -52,10 +52,19 @@ impl<R: Runtime> Geofence<R> {
             .map_err(Into::into)
     }
 
-    pub fn take_arrivals(&self) -> Result<Vec<i64>> {
+    /// Arrivées notées par Android et pas encore confirmées avec
+    /// [`Geofence::ack_arrivals`].
+    pub fn peek_arrivals(&self) -> Result<Vec<i64>> {
         self.0
-            .run_mobile_plugin::<Arrivals>("takeArrivals", ())
+            .run_mobile_plugin::<Arrivals>("peekArrivals", ())
             .map(|a| a.arrivals)
+            .map_err(Into::into)
+    }
+
+    /// Efface les arrivées jusqu'à `up_to` inclus, une fois enregistrées.
+    pub fn ack_arrivals(&self, up_to: i64) -> Result<()> {
+        self.0
+            .run_mobile_plugin("ackArrivals", AckArgs { up_to })
             .map_err(Into::into)
     }
 

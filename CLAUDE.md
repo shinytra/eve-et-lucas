@@ -13,7 +13,8 @@ Appli de couple pour Eve et Lucas, en Rust, pour Android et PC. Lucas valide cha
   - L'appli fournit le stockage via le trait `Store`. Pour un nouveau document partagé : l'ajouter à `doc_names()` et à `generate`/`receive` dans `apps/desktop/src-tauri/src/store.rs`.
   - Fichiers : la liste est le document `files` (`FilesDoc`, nom nettoyé : jamais de dossier), le contenu est rangé par empreinte BLAKE3 avec `iroh-blobs` (dossier `fichiers/`, ménage toutes les 10 min des contenus sans étiquette `fichier-<empreinte>`). Seuls les appareils de `DevicesDoc` peuvent en demander, personne ne peut en pousser. Après chaque synchro, une tâche à part (pour ne pas retarder les documents) télécharge ce que `Store::wanted_blobs` demande (tout sur PC, les images de 10 Mo au plus sur téléphone, le reste à la demande), puis libère les contenus des fichiers supprimés ailleurs (`retain_blobs`). Envoi depuis l'interface par morceaux en base64 (`upload_start`/`upload_chunk`/`upload_finish`) : Android ne transmet pas de binaire brut à Rust. Aperçus en `blob:` (autorisé dans `img-src`, images matricielles seulement). Enregistrement : `disk_name` (noms réservés Windows, 200 octets) ; pas encore sur Android (dossier privé de l'appli, il faudra MediaStore).
   - Réseau `Online` (relais et annuaire DNS publics de n0, chiffré de bout en bout, rien n'est stocké) dans l'appli ; `Local` (connexions directes) dans les tests.
-- **Kotlin (à venir)** : uniquement ce que Rust ne peut pas faire sur Android (géofencing en arrière-plan, widgets Glance, service au premier plan), sous forme de plugins Tauri maison dans `plugins/`. Jamais de code à la main dans `gen/android` (régénéré).
+- **Kotlin** : uniquement ce que Rust ne peut pas faire sur Android (géofencing en arrière-plan, widgets Glance, service au premier plan), sous forme de plugins Tauri maison dans `plugins/`. Jamais de code à la main dans `gen/android` (régénéré).
+  - `plugins/tauri-plugin-geofence` : zone « maison » de 150 m (Google Play Services), réenregistrée au redémarrage du téléphone. Chaque entrée est notée par Android même appli fermée ; l'appli les lit (`peek_arrivals`), les ajoute au document `arrivals` (`ArrivalsDoc`, anti-rebond de 5 min par appareil, ménage après 30 jours) puis les confirme (`ack_arrivals`) : rien n'est perdu si l'enregistrement échoue. Les autres appareils sonnent une fois par arrivée de moins de 15 min (identifiants déjà signalés dans `arrivee.json`). Limite actuelle : l'appareil qui doit sonner doit avoir l'appli lancée (PC en tâche de fond, téléphone en arrière-plan) ; le réveil par ntfy est prévu à l'étape 7.
 
 ## Commandes
 
@@ -79,5 +80,5 @@ Plutôt que de réécrire, s'inspirer de (ou dépendre de) :
 3. ✅ Appli Android avec la même base (APK construit par la CI, scan du QR code d'appairage ; reste à essayer sur vos téléphones).
 4. ✅ Tâches communes et rappels (notifications).
 5. ✅ Partage de fichiers P2P (iroh-blobs).
-6. Sonnerie à l'arrivée (géofencing, plugin Kotlin).
+6. ✅ Sonnerie à l'arrivée (géofencing, plugin Kotlin ; reste à essayer sur vos téléphones).
 7. Widgets interactifs partagés (Glance, plugin Kotlin), réveil par ntfy.

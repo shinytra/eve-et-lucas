@@ -37,8 +37,12 @@ impl<R: Runtime> Geofence<R> {
     }
 
     /// Aucune arrivée n'est jamais enregistrée sur PC.
-    pub fn take_arrivals(&self) -> Result<Vec<i64>> {
+    pub fn peek_arrivals(&self) -> Result<Vec<i64>> {
         Ok(Vec::new())
+    }
+
+    pub fn ack_arrivals(&self, _up_to: i64) -> Result<()> {
+        Ok(())
     }
 
     pub fn check_permissions(&self) -> Result<PermissionStatus> {

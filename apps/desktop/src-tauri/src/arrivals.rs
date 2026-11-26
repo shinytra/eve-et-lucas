@@ -7,9 +7,13 @@
 //! - Tous les appareils : une arrivée récente venue d'un autre appareil fait
 //!   sonner (notification avec son), une seule fois.
 
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex, PoisonError},
+    time::Duration,
+};
 
-use couple_core::Arrival;
+use couple_core::{arrivals::RING_WITHIN_MS, Arrival};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 use tauri_plugin_notification::NotificationExt;
@@ -22,20 +26,50 @@ pub struct ArrivalSettings {
     /// Qui porte ce téléphone (« Eve » ou « Lucas »).
     #[serde(default)]
     pub who: String,
-    /// Dernière arrivée déjà signalée ici (millisecondes Unix).
+    /// Identifiants des arrivées déjà signalées ici (seulement les récentes).
     #[serde(default)]
-    pub seen_until: i64,
+    pub rung: Vec<String>,
 }
+
+/// Une seule lecture-modification-écriture du fichier de réglages à la fois
+/// (la boucle de sonnerie et la commande de l'interface tournent en parallèle).
+static SETTINGS_LOCK: Mutex<()> = Mutex::new(());
 
 fn settings_path(state: &AppState) -> PathBuf {
     state.data_dir.join("arrivee.json")
 }
 
+/// Lit les réglages. Un fichier illisible est mis de côté avec un
+/// avertissement, et l'appli repart de réglages vides.
 fn load_settings(state: &AppState) -> ArrivalSettings {
-    std::fs::read(settings_path(state))
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .unwrap_or_default()
+    let path = settings_path(state);
+    let bytes = match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return ArrivalSettings::default(),
+        Err(e) => {
+            state.notice(format!(
+                "Réglages d'arrivée illisibles ({}) : {e}",
+                path.display()
+            ));
+            return ArrivalSettings::default();
+        }
+    };
+    match serde_json::from_slice(&bytes) {
+        Ok(settings) => settings,
+        Err(e) => {
+            let backup = path.with_extension(format!("corrompu-{}", now_ms()));
+            let moved = std::fs::rename(&path, &backup).is_ok();
+            state.notice(format!(
+                "Réglages d'arrivée illisibles ({e}) : {} Choisissez à nouveau qui porte ce téléphone.",
+                if moved {
+                    format!("mis de côté dans {}.", backup.display())
+                } else {
+                    "ignorés.".to_owned()
+                }
+            ));
+            ArrivalSettings::default()
+        }
+    }
 }
 
 fn save_settings(state: &AppState, settings: &ArrivalSettings) -> Result<(), String> {
@@ -61,6 +95,7 @@ pub fn set_arrival_person(state: State<'_, Arc<AppState>>, who: String) -> Resul
     if who.is_empty() || who.chars().count() > 60 {
         return Err("Prénom invalide".to_owned());
     }
+    let _guard = SETTINGS_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     let mut settings = load_settings(&state);
     settings.who = who.to_owned();
     save_settings(&state, &settings)
@@ -97,16 +132,25 @@ pub fn start(app: &AppHandle, state: Arc<AppState>) {
 
 /// Fait sonner pour les arrivées des autres pas encore signalées ici.
 fn ring_new_arrivals(app: &AppHandle, state: &AppState) {
+    let _guard = SETTINGS_LOCK.lock().unwrap_or_else(PoisonError::into_inner);
     let mut settings = load_settings(state);
     let now = now_ms();
-    let to_ring =
-        state
-            .arrivals
-            .lock()
-            .to_ring(&state.self_id.to_string(), settings.seen_until, now);
-    let Some(last) = to_ring.last() else {
-        return;
+    let (to_ring, recent) = {
+        let doc = state.arrivals.lock();
+        let recent: Vec<String> = doc
+            .list()
+            .into_iter()
+            .filter(|a| now - a.at <= RING_WITHIN_MS)
+            .map(|a| a.id)
+            .collect();
+        (
+            doc.to_ring(&state.self_id.to_string(), &settings.rung, now),
+            recent,
+        )
     };
+    if to_ring.is_empty() {
+        return;
+    }
     for arrival in &to_ring {
         let result = app
             .notification()
@@ -119,10 +163,21 @@ fn ring_new_arrivals(app: &AppHandle, state: &AppState) {
             state.notice(format!("Impossible de signaler l'arrivée : {e}"));
         }
     }
-    settings.seen_until = last.at;
+    settings.rung = remember(&settings.rung, &to_ring, &recent);
     if let Err(e) = save_settings(state, &settings) {
         eprintln!("{e}");
     }
+}
+
+/// Identifiants à retenir : ceux déjà signalés et ceux qu'on vient de
+/// signaler, limités aux arrivées encore récentes (au-delà, elles ne sonnent
+/// plus de toute façon).
+fn remember(rung: &[String], new: &[Arrival], recent: &[String]) -> Vec<String> {
+    rung.iter()
+        .cloned()
+        .chain(new.iter().map(|a| a.id.clone()))
+        .filter(|id| recent.contains(id))
+        .collect()
 }
 
 #[cfg(mobile)]
@@ -138,7 +193,7 @@ mod phone {
     /// Récupère les arrivées notées par Android et les ajoute au document.
     /// Les appels au plugin bloquent : jamais sur le fil principal.
     fn ingest(app: &AppHandle, state: &AppState) {
-        let arrivals = match app.geofence().take_arrivals() {
+        let mut arrivals = match app.geofence().peek_arrivals() {
             Ok(list) => list,
             Err(e) => {
                 eprintln!("Arrivées indisponibles : {e}");
@@ -148,17 +203,32 @@ mod phone {
         if arrivals.is_empty() {
             return;
         }
+        // Dans l'ordre : en cas d'échec, on confirme seulement ce qui précède.
+        arrivals.sort_unstable();
         let who = match load_settings(state).who {
             who if !who.trim().is_empty() => who,
             _ => state.device_name(),
         };
         let device = state.self_id.to_string();
-        for at in arrivals {
-            if let Err(e) = state
+        let mut saved_up_to = None;
+        for &at in &arrivals {
+            match state
                 .arrivals
                 .change("d'enregistrer l'arrivée", |d| d.add(&who, &device, at))
             {
-                state.notice(e);
+                Ok(_) => saved_up_to = Some(saved_up_to.map_or(at, |m: i64| m.max(at))),
+                Err(e) => {
+                    // Android les garde : nouvel essai au prochain évènement
+                    // ou au prochain démarrage.
+                    state.notice(e);
+                    break;
+                }
+            }
+        }
+        // Android oublie seulement ce qui est bien enregistré.
+        if let Some(up_to) = saved_up_to {
+            if let Err(e) = app.geofence().ack_arrivals(up_to) {
+                eprintln!("Impossible de confirmer les arrivées : {e}");
             }
         }
         // Les autres appareils l'apprennent tout de suite.
@@ -191,9 +261,25 @@ mod tests {
     fn settings_tolerate_missing_fields() {
         let s: ArrivalSettings = serde_json::from_str("{}").unwrap();
         assert_eq!(s.who, "");
-        assert_eq!(s.seen_until, 0);
+        assert!(s.rung.is_empty());
         let s: ArrivalSettings = serde_json::from_str(r#"{"who":"Eve"}"#).unwrap();
         assert_eq!(s.who, "Eve");
+    }
+
+    #[test]
+    fn remember_keeps_only_recent_ids() {
+        let a = |id: &str| Arrival {
+            id: id.into(),
+            who: "Eve".into(),
+            device: "d".into(),
+            at: 0,
+        };
+        let kept = remember(
+            &["vieux".into(), "b".into()],
+            &[a("c")],
+            &["b".into(), "c".into()],
+        );
+        assert_eq!(kept, vec!["b".to_owned(), "c".to_owned()]);
     }
 
     #[test]

@@ -81,13 +81,20 @@ object GeofenceStore {
     prefs(context).edit().putString(KEY_ARRIVALS, json.toString()).commit()
   }
 
-  /** Renvoie les arrivées enregistrées et les efface. */
+  /** Renvoie les arrivées enregistrées, sans les effacer. */
   @Synchronized
-  fun takeArrivals(context: Context): List<Long> {
-    val p = prefs(context)
-    val arrivals = readArrivals(p)
-    p.edit().remove(KEY_ARRIVALS).commit()
-    return arrivals
+  fun peekArrivals(context: Context): List<Long> = readArrivals(prefs(context))
+
+  /**
+   * Efface les arrivées jusqu'à `upTo` inclus, une fois que l'appli les a
+   * enregistrées : une arrivée survenue entre-temps est gardée.
+   */
+  @Synchronized
+  fun ackArrivals(context: Context, upTo: Long) {
+    val rest = readArrivals(prefs(context)).filter { it > upTo }
+    val json = JSONArray()
+    for (t in rest) json.put(t)
+    prefs(context).edit().putString(KEY_ARRIVALS, json.toString()).commit()
   }
 
   /** Une liste illisible est ignorée, jamais bloquante. */

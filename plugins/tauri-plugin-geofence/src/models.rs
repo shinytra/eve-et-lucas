@@ -82,6 +82,13 @@ pub(crate) struct RingArgs {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub(crate) struct AckArgs {
+    pub up_to: i64,
+}
+
+#[derive(Debug, Serialize)]
 // Utilisé seulement par l'implémentation Android.
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub(crate) struct RequestPermissionsArgs {

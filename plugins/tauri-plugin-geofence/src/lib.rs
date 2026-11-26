@@ -5,11 +5,11 @@
 //! services Google Play. À chaque entrée, son récepteur note la date dans les
 //! préférences Android, affiche une notification et, si demandé, fait sonner
 //! le téléphone. L'appli récupère ensuite ces dates avec
-//! [`Geofence::take_arrivals`] (au démarrage, ou quand l'évènement
+//! [`Geofence::peek_arrivals`] puis les confirme avec [`Geofence::ack_arrivals`] (au démarrage, ou quand l'évènement
 //! [`Geofence::on_arrival`] la prévient alors qu'elle tourne déjà).
 //!
-//! Sur PC, chaque appel renvoie [`Error::Unsupported`] (sauf `take_arrivals`,
-//! qui renvoie une liste vide).
+//! Sur PC, chaque appel renvoie [`Error::Unsupported`] (sauf `peek_arrivals`
+//! et `ack_arrivals`, sans effet).
 
 use tauri::{
     plugin::{Builder, TauriPlugin},

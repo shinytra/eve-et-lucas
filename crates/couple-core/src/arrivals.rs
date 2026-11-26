@@ -114,15 +114,17 @@ impl ArrivalsDoc {
     }
 
     /// Arrivées qui doivent faire sonner cet appareil : venues d'un autre
-    /// appareil, récentes, et postérieures à `seen_until` (la dernière déjà
-    /// signalée ici), de la plus ancienne à la plus récente.
-    pub fn to_ring(&self, self_device: &str, seen_until: i64, now_ms: i64) -> Vec<Arrival> {
+    /// appareil, récentes, et absentes de `rung` (identifiants déjà signalés
+    /// ici), de la plus ancienne à la plus récente. On garde des identifiants
+    /// plutôt qu'une date : une arrivée reçue en retard par la synchro, mais
+    /// plus ancienne qu'une autre déjà signalée, sonne quand même.
+    pub fn to_ring(&self, self_device: &str, rung: &[String], now_ms: i64) -> Vec<Arrival> {
         let mut list: Vec<Arrival> = self
             .list()
             .into_iter()
             .filter(|a| {
                 a.device != self_device
-                    && a.at > seen_until
+                    && !rung.contains(&a.id)
                     && now_ms - a.at <= RING_WITHIN_MS
                     && a.at <= now_ms + 60_000
             })
@@ -173,12 +175,36 @@ mod tests {
         let recent = doc.add("Eve", "tel-eve", now - 2 * MIN).unwrap().unwrap();
         let mine = doc.add("Lucas", "pc", now - MIN).unwrap().unwrap();
         let ids = |v: Vec<Arrival>| v.into_iter().map(|a| a.id).collect::<Vec<_>>();
-        assert_eq!(ids(doc.to_ring("pc", 0, now)), vec![recent.id.clone()]);
+        assert_eq!(ids(doc.to_ring("pc", &[], now)), vec![recent.id.clone()]);
         // Déjà signalée : plus rien.
-        assert!(doc.to_ring("pc", recent.at, now).is_empty());
+        assert!(doc.to_ring("pc", std::slice::from_ref(&recent.id), now).is_empty());
         // L'autre téléphone, lui, sonne pour l'arrivée du PC… et pas pour la sienne.
-        assert_eq!(ids(doc.to_ring("tel-eve", 0, now)), vec![mine.id]);
-        assert!(!ids(doc.to_ring("pc", 0, now)).contains(&old.id));
+        assert_eq!(ids(doc.to_ring("tel-eve", &[], now)), vec![mine.id]);
+        assert!(!ids(doc.to_ring("pc", &[], now)).contains(&old.id));
+    }
+
+    #[test]
+    fn late_synced_arrival_still_rings() {
+        let now = 1_000 * MIN;
+        let mut pc = ArrivalsDoc::new();
+        let mut tel_eve = pc.fork();
+        let mut tel_lucas = pc.fork();
+        let eve = tel_eve
+            .add("Eve", "tel-eve", now - 5 * MIN)
+            .unwrap()
+            .unwrap();
+        let lucas = tel_lucas
+            .add("Lucas", "tel-lucas", now - 2 * MIN)
+            .unwrap()
+            .unwrap();
+        // Le PC reçoit d'abord l'arrivée de Lucas (la plus récente) et sonne.
+        pc.merge(&mut tel_lucas).unwrap();
+        let ids = |v: Vec<Arrival>| v.into_iter().map(|a| a.id).collect::<Vec<_>>();
+        let rung = ids(pc.to_ring("pc", &[], now));
+        assert_eq!(rung, vec![lucas.id.clone()]);
+        // Celle d'Eve, plus ancienne, arrive ensuite : elle sonne aussi.
+        pc.merge(&mut tel_eve).unwrap();
+        assert_eq!(ids(pc.to_ring("pc", &rung, now)), vec![eve.id]);
     }
 
     #[test]

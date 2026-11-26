@@ -4,7 +4,7 @@ Permissions par défaut du géofencing : définir ou effacer la maison, lire la
 position actuelle, choisir si ce téléphone sonne à l'arrivée, vérifier et
 demander les autorisations Android.
 
-La lecture des arrivées enregistrées (`take_arrivals`) reste réservée au code
+La lecture des arrivées enregistrées (`peek_arrivals`, `ack_arrivals`) reste réservée au code
 Rust de l'appli : elle n'est pas exposée à l'interface.
 
 #### This default permission set includes the following:
