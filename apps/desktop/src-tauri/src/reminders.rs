@@ -34,8 +34,9 @@ const REPEAT_MS: i64 = if cfg!(mobile) {
     60 * 60 * 1000
 };
 
-/// Identifiant de notification d'une tâche, stable d'un lancement à l'autre.
-fn notification_id(task_id: &str) -> i32 {
+/// Identifiant de notification d'une tâche (ou d'un rappel de date), stable
+/// d'un lancement à l'autre.
+pub(crate) fn notification_id(task_id: &str) -> i32 {
     // FNV-1a : simple et identique sur toutes les plateformes.
     let hash = task_id.bytes().fold(0x811c_9dc5_u32, |h, b| {
         (h ^ u32::from(b)).wrapping_mul(0x0100_0193)

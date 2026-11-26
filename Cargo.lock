@@ -1542,6 +1542,7 @@ dependencies = [
  "couple-core",
  "couple-sync",
  "data-encoding",
+ "jiff 1.0.3",
  "qrcode",
  "reqwest",
  "rustls",

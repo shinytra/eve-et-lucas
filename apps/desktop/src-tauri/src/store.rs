@@ -8,7 +8,7 @@ use std::{
 };
 
 use couple_core::{
-    ArrivalsDoc, DevicesDoc, FilesDoc, NotesDoc, PushDoc, SyncState, Syncable, TasksDoc,
+    ArrivalsDoc, DatesDoc, DevicesDoc, FilesDoc, NotesDoc, PushDoc, SyncState, Syncable, TasksDoc,
 };
 use couple_sync::{
     iroh::{EndpointId, SecretKey},
@@ -40,6 +40,15 @@ impl Persist for TasksDoc {
     }
     fn save(&mut self) -> Vec<u8> {
         TasksDoc::save(self)
+    }
+}
+
+impl Persist for DatesDoc {
+    fn load(bytes: &[u8]) -> couple_core::Result<Self> {
+        DatesDoc::load(bytes)
+    }
+    fn save(&mut self) -> Vec<u8> {
+        DatesDoc::save(self)
     }
 }
 
@@ -190,6 +199,7 @@ pub fn load_or_create_key(path: &Path) -> std::io::Result<SecretKey> {
 
 pub const NOTES_DOC: &str = "notes";
 pub const TASKS_DOC: &str = "tasks";
+pub const DATES_DOC: &str = "dates";
 pub const FILES_DOC: &str = "files";
 pub const ARRIVALS_DOC: &str = "arrivals";
 pub const PUSH_DOC: &str = "push";
@@ -201,6 +211,7 @@ const AUTO_DOWNLOAD_MAX: u64 = 10 * 1024 * 1024;
 pub struct AppState {
     pub notes: Persisted<NotesDoc>,
     pub tasks: Persisted<TasksDoc>,
+    pub dates: Persisted<DatesDoc>,
     pub files: Persisted<FilesDoc>,
     pub arrivals: Persisted<ArrivalsDoc>,
     /// Clé et adresses du réveil par ntfy.
@@ -220,6 +231,8 @@ pub struct AppState {
     pub sync_wanted: Notify,
     /// Réveille la boucle des rappels quand les tâches ont changé.
     pub reminders_wanted: Notify,
+    /// Réveille la boucle des rappels quand les dates ont changé.
+    pub dates_wanted: Notify,
     /// Réveille la boucle qui fait sonner à l'arrivée de l'autre.
     pub arrivals_wanted: Notify,
     /// Réveille la mise à jour du réveil par ntfy (clé, adresses).
@@ -241,6 +254,7 @@ impl AppState {
         let mut startup_warnings = Vec::new();
         let notes = Persisted::load(data_dir.join("notes.automerge"), &mut startup_warnings)?;
         let tasks = Persisted::load(data_dir.join("tasks.automerge"), &mut startup_warnings)?;
+        let dates = Persisted::load(data_dir.join("dates.automerge"), &mut startup_warnings)?;
         let files = Persisted::load(data_dir.join("files.automerge"), &mut startup_warnings)?;
         let arrivals = Persisted::load(data_dir.join("arrivals.automerge"), &mut startup_warnings)?;
         let push = Persisted::load(data_dir.join("push.automerge"), &mut startup_warnings)?;
@@ -250,6 +264,7 @@ impl AppState {
         let state = Self {
             notes,
             tasks,
+            dates,
             files,
             arrivals,
             push,
@@ -261,6 +276,7 @@ impl AppState {
             secret,
             sync_wanted: Notify::new(),
             reminders_wanted: Notify::new(),
+            dates_wanted: Notify::new(),
             downloads_wanted: Notify::new(),
             arrivals_wanted: Notify::new(),
             push_wanted: Notify::new(),
@@ -314,6 +330,9 @@ impl AppState {
             TASKS_DOC => self.tasks.change("de synchroniser les tâches", |d| {
                 d.receive_sync_message(state, message)
             }),
+            DATES_DOC => self.dates.change("de synchroniser les dates", |d| {
+                d.receive_sync_message(state, message)
+            }),
             FILES_DOC => self.files.change("de synchroniser les fichiers", |d| {
                 d.receive_sync_message(state, message)
             }),
@@ -334,6 +353,7 @@ impl AppState {
         match doc {
             NOTES_DOC => Ok(f(&mut *self.notes.lock())),
             TASKS_DOC => Ok(f(&mut *self.tasks.lock())),
+            DATES_DOC => Ok(f(&mut *self.dates.lock())),
             FILES_DOC => Ok(f(&mut *self.files.lock())),
             ARRIVALS_DOC => Ok(f(&mut *self.arrivals.lock())),
             PUSH_DOC => Ok(f(&mut *self.push.lock())),
@@ -353,6 +373,7 @@ impl Store for AppState {
             FILES_DOC.into(),
             ARRIVALS_DOC.into(),
             PUSH_DOC.into(),
+            DATES_DOC.into(),
         ]
     }
 
@@ -435,6 +456,9 @@ impl Store for AppState {
         }
         if docs.iter().any(|d| d == FILES_DOC) {
             self.downloads_wanted.notify_one();
+        }
+        if docs.iter().any(|d| d == DATES_DOC) {
+            self.dates_wanted.notify_one();
         }
         if let Some(app) = self.app.get() {
             if let Err(e) = app.emit("docs-changed", docs) {
@@ -552,7 +576,25 @@ pub(crate) mod tests {
             .change("d'ajouter", |d| d.add("Lucas", "Pain", "", Some(5), 1))
             .unwrap();
 
-        for doc in [NOTES_DOC, TASKS_DOC] {
+        pc.dates
+            .change("d'ajouter", |d| {
+                d.add(
+                    "Lucas",
+                    &couple_core::DateInput {
+                        title: "Nous".into(),
+                        kind: "couple".into(),
+                        month: 6,
+                        day: 12,
+                        year: Some(2021),
+                        yearly: true,
+                        remind_days: 7,
+                    },
+                    1,
+                )
+            })
+            .unwrap();
+
+        for doc in [NOTES_DOC, TASKS_DOC, DATES_DOC] {
             let (mut s_pc, mut s_phone) = (SyncState::new(), SyncState::new());
             for _ in 0..10 {
                 let m1 = pc.generate(doc, &mut s_pc).unwrap();
@@ -571,6 +613,7 @@ pub(crate) mod tests {
         let reloaded = AppState::load(&b, "Téléphone").unwrap();
         assert_eq!(reloaded.notes.lock().list().unwrap().len(), 1);
         assert_eq!(reloaded.tasks.lock().list().len(), 1);
+        assert_eq!(reloaded.dates.lock().list().len(), 1);
         assert!(phone.generate("inconnu", &mut SyncState::new()).is_err());
         fs::remove_dir_all(a).unwrap();
         fs::remove_dir_all(b).unwrap();

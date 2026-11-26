@@ -26,6 +26,9 @@ uuid.workspace = true
 data-encoding = "2"
 tauri = { version = "2.12", features = ["tray-icon"] }
 tauri-plugin-notification = "2.8"
+# Date et heure locales avec le fuseau de l'appareil (rappels des dates
+# importantes), Android compris. Remplaçant conseillé de chrono (plus maintenu).
+jiff = "1"
 # Arrivée à la maison (géofencing Android) ; sur PC, chaque appel renvoie une erreur.
 tauri-plugin-geofence = { path = "../../../plugins/tauri-plugin-geofence" }
 # Widget d'écran d'accueil (Android) ; sur PC, chaque appel est sans effet.
