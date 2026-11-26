@@ -28,6 +28,19 @@ pub struct SyncHandle {
 }
 
 impl SyncHandle {
+    /// Le nœud, s'il a démarré.
+    pub fn node(&self) -> Result<&SyncNode<AppState>, String> {
+        self.node.get().ok_or_else(|| {
+            self.start_error
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .clone()
+                .unwrap_or_else(|| {
+                    "La synchro démarre encore, réessaie dans un instant.".to_owned()
+                })
+        })
+    }
+
     fn set_status(&self, app: &AppHandle, status: SyncStatus) {
         *self.last_status.lock().unwrap_or_else(|e| e.into_inner()) = Some(status.clone());
         let _ = app.emit("sync-status", status);
@@ -40,8 +53,15 @@ pub fn start(app: &AppHandle, state: Arc<AppState>) {
     let _ = state.app.set(app.clone());
     let app = app.clone();
     async_runtime::spawn(async move {
-        let node = match SyncNode::spawn(state.secret.clone(), state.clone(), Network::Online).await
-        {
+        let files_dir = state.data_dir.join("fichiers");
+        let spawned = SyncNode::spawn_with_files(
+            state.secret.clone(),
+            state.clone(),
+            Network::Online,
+            &files_dir,
+        )
+        .await;
+        let node = match spawned {
             Ok(node) => node,
             Err(e) => {
                 let message = format!("La synchro n'a pas pu démarrer : {e}");
@@ -58,11 +78,36 @@ pub fn start(app: &AppHandle, state: Arc<AppState>) {
         let Some(node) = handle.node.get() else {
             return;
         };
+        spawn_downloads(app.clone(), state.clone());
         loop {
             run_once(&app, &handle, node, &state).await;
+            state.downloads_wanted.notify_one();
             // Prochaine synchro : après une modification locale, ou au plus tard
             // après l'intervalle.
             let _ = tokio::time::timeout(SYNC_INTERVAL, state.sync_wanted.notified()).await;
+        }
+    });
+}
+
+/// Téléchargements de fichiers, à part de la synchro des documents : un gros
+/// fichier ne retarde pas les notes et les tâches. Après chaque passage, les
+/// contenus des fichiers supprimés (ici ou ailleurs) sont libérés.
+fn spawn_downloads(app: AppHandle, state: Arc<AppState>) {
+    async_runtime::spawn(async move {
+        let handle = app.state::<SyncHandle>();
+        let Some(node) = handle.node.get() else {
+            return;
+        };
+        loop {
+            state.downloads_wanted.notified().await;
+            for peer in couple_sync::Store::peers(&*state) {
+                node.fetch_wanted_from(peer).await;
+            }
+            let _guard = state.blob_guard.lock().await;
+            let keep = state.files.lock().hashes();
+            if let Err(e) = node.retain_blobs(&keep).await {
+                eprintln!("Ménage des fichiers impossible : {e}");
+            }
         }
     });
 }

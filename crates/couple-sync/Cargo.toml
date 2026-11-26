@@ -9,6 +9,8 @@ rust-version.workspace = true
 [dependencies]
 couple-core.workspace = true
 iroh = "1.5"
+iroh-blobs = "0.105"
+n0-future = "0.3"
 tokio = { version = "1", features = ["sync", "time", "macros", "rt"] }
 serde.workspace = true
 serde_json.workspace = true

@@ -5,11 +5,13 @@
 //! l'appli Android et, plus tard, par la synchro iroh.
 
 pub mod devices;
+pub mod files;
 pub mod notes;
 pub mod sync;
 pub mod tasks;
 
 pub use devices::{Device, DevicesDoc};
+pub use files::{FilesDoc, SharedFile};
 pub use notes::{Note, NotesDoc};
 pub use sync::{SyncState, Syncable};
 pub use tasks::{Task, TasksDoc};
@@ -27,6 +29,12 @@ pub enum Error {
     EmptyTask,
     #[error("le titre d'une tâche ne doit pas dépasser {0} caractères")]
     TaskTooLong(usize),
+    #[error("le fichier {0} n'existe pas")]
+    FileNotFound(String),
+    #[error("un fichier partagé ne doit pas dépasser {0} Mo")]
+    FileTooLarge(u64),
+    #[error("fichier invalide : {0}")]
+    InvalidFile(String),
     #[error("il manque le prénom")]
     MissingAuthor,
     #[error("appareil invalide : {0}")]

@@ -12,11 +12,20 @@
 //!   échangent des messages du protocole de synchro d'Automerge jusqu'à ce
 //!   qu'aucun n'ait plus rien à envoyer.
 //!
+//! - **Fichiers** (ALPN d'iroh-blobs) : le contenu des fichiers partagés est
+//!   rangé par empreinte BLAKE3 et transféré de façon vérifiée. Seuls les
+//!   appareils appairés peuvent en demander. L'appli télécharge ceux qu'elle
+//!   veut ([`Store::wanted_blobs`]) avec [`SyncNode::fetch_wanted_from`], à
+//!   part, pour qu'un gros fichier ne retarde pas la synchro des documents.
+//!
 //! Le stockage (où sont les documents, comment ils sont enregistrés) est fourni
 //! par l'appli via le trait [`Store`].
 
+mod blobs;
+
 use std::{
     collections::HashMap,
+    path::Path,
     sync::{Arc, Mutex, MutexGuard},
     time::{Duration, Instant},
 };
@@ -30,6 +39,7 @@ use iroh::{
 use serde::{Deserialize, Serialize};
 
 pub use iroh;
+pub use iroh_blobs;
 
 /// Protocole de synchro des documents.
 pub const SYNC_ALPN: &[u8] = b"eve-et-lucas/sync/1";
@@ -103,6 +113,13 @@ pub trait Store: Send + Sync + 'static {
     /// Le code d'appairage affiché vient d'être utilisé (accepté ou non) :
     /// il n'est plus valable.
     fn pairing_used(&self, _accepted: bool) {}
+    /// Empreintes (hexadécimal) des fichiers à télécharger automatiquement
+    /// s'ils manquent sur cet appareil.
+    fn wanted_blobs(&self) -> Vec<String> {
+        Vec::new()
+    }
+    /// Des fichiers viennent d'être téléchargés.
+    fn blobs_received(&self, _hashes: &[String]) {}
 }
 
 /// Comment l'appareil se connecte au réseau.
@@ -190,8 +207,8 @@ struct Pending {
     expires: Instant,
 }
 
-struct Shared<S: Store> {
-    store: Arc<S>,
+pub(crate) struct Shared<S: Store> {
+    pub(crate) store: Arc<S>,
     pending: Mutex<Option<Pending>>,
     /// Adresses connues (apprises à l'appairage) pour joindre un pair sans annuaire.
     addrs: Mutex<HashMap<EndpointId, EndpointAddr>>,
@@ -210,11 +227,33 @@ impl<S: Store> Shared<S> {
 pub struct SyncNode<S: Store> {
     router: Router,
     shared: Arc<Shared<S>>,
+    blobs: blobs::Blobs,
 }
 
 impl<S: Store> SyncNode<S> {
-    /// Démarre le nœud avec la clé (identité) de l'appareil.
+    /// Démarre le nœud avec la clé (identité) de l'appareil. Le contenu des
+    /// fichiers est gardé en mémoire (tests) : voir [`SyncNode::spawn_with_files`].
     pub async fn spawn(secret: SecretKey, store: Arc<S>, network: Network) -> Result<Self> {
+        Self::spawn_inner(secret, store, network, blobs::Blobs::memory()).await
+    }
+
+    /// Démarre le nœud en rangeant le contenu des fichiers dans `dir`.
+    pub async fn spawn_with_files(
+        secret: SecretKey,
+        store: Arc<S>,
+        network: Network,
+        dir: &Path,
+    ) -> Result<Self> {
+        let blobs = blobs::Blobs::on_disk(dir).await?;
+        Self::spawn_inner(secret, store, network, blobs).await
+    }
+
+    async fn spawn_inner(
+        secret: SecretKey,
+        store: Arc<S>,
+        network: Network,
+        blobs: blobs::Blobs,
+    ) -> Result<Self> {
         let builder = match network {
             Network::Online => Endpoint::builder(iroh::endpoint::presets::N0),
             Network::Local => Endpoint::builder(iroh::endpoint::presets::Minimal)
@@ -226,11 +265,20 @@ impl<S: Store> SyncNode<S> {
             pending: Mutex::new(None),
             addrs: Mutex::new(HashMap::new()),
         });
+        let only_peers = blobs::only_peers(shared.clone());
         let router = Router::builder(endpoint)
             .accept(SYNC_ALPN, SyncHandler(shared.clone()))
             .accept(PAIR_ALPN, PairHandler(shared.clone()))
+            .accept(
+                iroh_blobs::ALPN,
+                iroh_blobs::BlobsProtocol::new(blobs.api(), Some(only_peers)),
+            )
             .spawn();
-        Ok(Self { router, shared })
+        Ok(Self {
+            router,
+            shared,
+            blobs,
+        })
     }
 
     pub fn id(&self) -> EndpointId {
