@@ -44,30 +44,38 @@ pub fn start(app: &AppHandle, state: Arc<AppState>) {
 /// Ajoute une arrivée reçue par ntfy. `already_rung` : le téléphone a déjà
 /// sonné de lui-même (code Kotlin), il ne faut pas sonner une deuxième fois.
 ///
-/// Une arrivée d'un appareil qui n'est pas (ou plus) appairé, venant de
-/// soi-même, datée dans le futur ou trop ancienne pour sonner est ignorée
-/// (`Ok`). `Err` seulement si l'enregistrement a échoué : à réessayer.
-pub(crate) fn accept(state: &AppState, arrival: Arrival, already_rung: bool) -> Result<(), String> {
+/// Renvoie `Ok(true)` quand le message est traité (ajouté, déjà connu, ou à
+/// ignorer : venant de soi-même, daté dans le futur ou trop ancien pour
+/// sonner), `Ok(false)` quand il faut le garder pour plus tard : appareil pas
+/// encore connu ici (la liste des appareils n'est peut-être pas encore
+/// synchronisée). `Err` si l'enregistrement a échoué.
+pub(crate) fn accept(
+    state: &AppState,
+    arrival: Arrival,
+    already_rung: bool,
+) -> Result<bool, String> {
     let now = crate::now_ms();
+    if arrival.device == state.self_id.to_string()
+        || arrival.at > now + 60_000
+        || now - arrival.at > RING_WITHIN_MS
+    {
+        return Ok(true);
+    }
     let known = state
         .devices
         .lock()
         .list()
         .iter()
         .any(|d| d.id == arrival.device);
-    if arrival.device == state.self_id.to_string()
-        || !known
-        || arrival.at > now + 60_000
-        || now - arrival.at > RING_WITHIN_MS
-    {
-        eprintln!("Arrivée reçue par ntfy ignorée (appareil inconnu ou date hors délai)");
-        return Ok(());
+    if !known {
+        eprintln!("Arrivée reçue par ntfy d'un appareil inconnu ici : mise de côté");
+        return Ok(false);
     }
     if crate::arrivals::add_received(state, &arrival, already_rung)? {
         state.sync_wanted.notify_one();
         Store::changed(state, &[ARRIVALS_DOC.to_owned()]);
     }
-    Ok(())
+    Ok(true)
 }
 
 #[cfg(desktop)]
@@ -230,6 +238,8 @@ mod desktop {
         };
         match open(&key, &text).map(couple_core::PushMessage::into_arrival) {
             Ok(Some(arrival)) => {
+                // Appareil inconnu (`Ok(false)`) : rien à garder sur PC, le
+                // sujet est rattrapé au démarrage et la synchro suivra.
                 if let Err(e) = super::accept(state, arrival, false) {
                     state.notice(e);
                 }
@@ -468,7 +478,10 @@ pub(crate) mod phone {
             };
             // Le téléphone a déjà sonné en recevant le message.
             match super::accept(state, arrival, true) {
-                Ok(()) => ids.push(id),
+                Ok(true) => ids.push(id),
+                // Gardée par Android : reprise quand l'appareil sera connu
+                // (au-delà de 15 min, elle sera simplement oubliée).
+                Ok(false) => {}
                 // Pas confirmée : Android la garde pour un nouvel essai.
                 Err(e) => {
                     state.notice(e);
