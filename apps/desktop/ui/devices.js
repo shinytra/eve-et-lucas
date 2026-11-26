@@ -100,9 +100,8 @@
     button.disabled = true;
     statusLine.textContent = "Appairage en cours…";
     try {
-      await invoke("join_pairing", { code });
+      statusLine.textContent = await invoke("join_pairing", { code });
       $("join-code").value = "";
-      statusLine.textContent = "Appairage réussi.";
     } catch (e) {
       showError(String(e));
       statusLine.textContent = "";
@@ -125,20 +124,39 @@
 
   $("sync-now").addEventListener("click", () => invoke("sync_now").catch((e) => showError(String(e))));
 
-  tauri.event?.listen("sync-status", ({ payload }) => {
+  function showStatus(payload) {
+    if (!payload) return;
     if (payload.error) {
       statusLine.textContent = payload.error;
-    } else if (payload.total === 0) {
-      statusLine.textContent = "Aucun autre appareil appairé pour l'instant.";
-    } else {
-      statusLine.dataset.reached = String(payload.reached);
-      statusLine.textContent = `Dernière synchro à ${formatTime(payload.at)} : ${payload.reached} appareil(s) joint(s) sur ${payload.total}.`;
+      return;
     }
+    if (payload.total === 0) {
+      statusLine.textContent = "Aucun autre appareil appairé pour l'instant.";
+      return;
+    }
+    statusLine.dataset.reached = String(payload.reached);
+    let text = `Dernière synchro à ${formatTime(payload.at)} : ${payload.reached} appareil(s) joint(s) sur ${payload.total}.`;
+    const absent = payload.failures.filter((f) => f.unreachable).map((f) => f.device);
+    if (absent.length) text += ` Injoignable(s) pour l'instant : ${absent.join(", ")}.`;
+    statusLine.textContent = text;
+    // Une vraie erreur (disque, protocole) est signalée à part.
+    const errors = payload.failures.filter((f) => !f.unreachable);
+    showError(errors.length ? errors.map((f) => `${f.device} : ${f.message}`).join("\n") : null);
+  }
+
+  tauri.event?.listen("sync-status", ({ payload }) => showStatus(payload));
+
+  tauri.event?.listen("pairing-used", ({ payload: accepted }) => {
+    pairing.hidden = true;
+    $("pair-qr").replaceChildren();
+    statusLine.textContent = accepted
+      ? "Nouvel appareil appairé."
+      : "Le code d'appairage a été utilisé sans succès ; crée-en un nouveau si besoin.";
   });
 
   tauri.event?.listen("docs-changed", ({ payload }) => {
     if (payload?.includes("devices")) refreshDevices();
   });
 
-  refreshDevices();
+  refreshDevices().then(() => invoke("sync_status").then(showStatus).catch(() => {}));
 })();

@@ -146,6 +146,7 @@ pub fn run() {
             sync::cancel_pairing,
             sync::join_pairing,
             sync::sync_now,
+            sync::sync_status,
         ])
         .run(tauri::generate_context!());
 

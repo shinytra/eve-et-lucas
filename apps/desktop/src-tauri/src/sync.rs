@@ -1,6 +1,9 @@
 //! Synchro en tâche de fond et commandes d'appairage.
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use couple_sync::{Network, SyncNode};
 use serde::Serialize;
@@ -14,9 +17,22 @@ const SYNC_INTERVAL: Duration = Duration::from_secs(60);
 /// Durée de validité d'un code d'appairage.
 const PAIRING_TTL: Duration = Duration::from_secs(10 * 60);
 
-/// Le nœud iroh, une fois démarré.
+/// Le nœud iroh, une fois démarré, et le dernier état de la synchro.
 #[derive(Default)]
-pub struct SyncHandle(pub OnceCell<SyncNode<AppState>>);
+pub struct SyncHandle {
+    node: OnceCell<SyncNode<AppState>>,
+    /// Si le démarrage a échoué, pourquoi.
+    start_error: Mutex<Option<String>>,
+    /// Dernier état, pour l'interface qui s'ouvre après coup.
+    last_status: Mutex<Option<SyncStatus>>,
+}
+
+impl SyncHandle {
+    fn set_status(&self, app: &AppHandle, status: SyncStatus) {
+        *self.last_status.lock().unwrap_or_else(|e| e.into_inner()) = Some(status.clone());
+        let _ = app.emit("sync-status", status);
+    }
+}
 
 /// Démarre le nœud et la boucle de synchro (en arrière-plan, sans bloquer
 /// l'ouverture de la fenêtre).
@@ -30,15 +46,20 @@ pub fn start(app: &AppHandle, state: Arc<AppState>) {
             Err(e) => {
                 let message = format!("La synchro n'a pas pu démarrer : {e}");
                 eprintln!("{message}");
-                let _ = app.emit("sync-status", SyncStatus::error(message));
+                let handle = app.state::<SyncHandle>();
+                *handle.start_error.lock().unwrap_or_else(|e| e.into_inner()) =
+                    Some(message.clone());
+                handle.set_status(&app, SyncStatus::error(message));
                 return;
             }
         };
         let handle = app.state::<SyncHandle>();
-        let _ = handle.0.set(node);
-        let Some(node) = handle.0.get() else { return };
+        let _ = handle.node.set(node);
+        let Some(node) = handle.node.get() else {
+            return;
+        };
         loop {
-            run_once(&app, node).await;
+            run_once(&app, &handle, node, &state).await;
             // Prochaine synchro : après une modification locale, ou au plus tard
             // après l'intervalle.
             let _ = tokio::time::timeout(SYNC_INTERVAL, state.sync_wanted.notified()).await;
@@ -46,16 +67,55 @@ pub fn start(app: &AppHandle, state: Arc<AppState>) {
     });
 }
 
-async fn run_once(app: &AppHandle, node: &SyncNode<AppState>) {
+async fn run_once(
+    app: &AppHandle,
+    handle: &SyncHandle,
+    node: &SyncNode<AppState>,
+    state: &AppState,
+) {
     let results = node.sync_all().await;
-    let reached = results.iter().filter(|(_, r)| r.is_ok()).count();
+    let names: std::collections::HashMap<String, String> = state
+        .devices
+        .lock()
+        .list()
+        .into_iter()
+        .map(|d| (d.id, d.name))
+        .collect();
+    let mut failures = Vec::new();
+    for (peer, result) in &results {
+        if let Err(e) = result {
+            let name = names
+                .get(&peer.to_string())
+                .cloned()
+                .unwrap_or_else(|| peer.fmt_short().to_string());
+            eprintln!("Synchro avec {name} impossible : {e}");
+            failures.push(SyncFailure {
+                device: name,
+                // Un appareil injoignable est normal (téléphone en veille, PC
+                // éteint) ; les autres erreurs méritent d'être signalées.
+                unreachable: matches!(
+                    e,
+                    couple_sync::SyncError::Timeout | couple_sync::SyncError::Network(_)
+                ),
+                message: e.to_string(),
+            });
+        }
+    }
     let status = SyncStatus {
         at: now_ms(),
-        reached,
+        reached: results.len() - failures.len(),
         total: results.len(),
         error: None,
+        failures,
     };
-    let _ = app.emit("sync-status", status);
+    handle.set_status(app, status);
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SyncFailure {
+    pub device: String,
+    pub unreachable: bool,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -67,6 +127,8 @@ pub struct SyncStatus {
     /// Appareils appairés.
     pub total: usize,
     pub error: Option<String>,
+    /// Appareils non joints, et pourquoi.
+    pub failures: Vec<SyncFailure>,
 }
 
 impl SyncStatus {
@@ -76,15 +138,33 @@ impl SyncStatus {
             reached: 0,
             total: 0,
             error: Some(message),
+            failures: Vec::new(),
         }
     }
 }
 
 fn node<'a>(handle: &'a State<'_, SyncHandle>) -> Result<&'a SyncNode<AppState>, String> {
+    if let Some(node) = handle.node.get() {
+        return Ok(node);
+    }
+    let start_error = handle
+        .start_error
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    Err(start_error.unwrap_or_else(|| {
+        "La synchro démarre encore, réessaie dans quelques secondes.".to_owned()
+    }))
+}
+
+/// Dernier état connu de la synchro (l'interface le demande à l'ouverture).
+#[tauri::command]
+pub fn sync_status(handle: State<'_, SyncHandle>) -> Option<SyncStatus> {
     handle
-        .0
-        .get()
-        .ok_or_else(|| "La synchro démarre encore, réessaie dans quelques secondes.".to_owned())
+        .last_status
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
 }
 
 #[derive(Debug, Serialize)]
@@ -129,7 +209,7 @@ pub fn remove_device(state: State<'_, Arc<AppState>>, id: String) -> Result<(), 
     }
     state
         .devices
-        .change("de retirer l'appareil", |d| d.remove(&id))?;
+        .change("de retirer l'appareil", |d| d.remove(&id, now_ms()))?;
     state.sync_wanted.notify_one();
     Ok(())
 }
@@ -175,14 +255,21 @@ pub async fn join_pairing(
     handle: State<'_, SyncHandle>,
     state: State<'_, Arc<AppState>>,
     code: String,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let node = node(&handle)?;
-    node.join(&code)
+    let outcome = node
+        .join(&code)
         .await
         .map_err(|e| format!("Appairage impossible : {e}"))?;
     // Prévient aussi les autres appareils déjà connus.
     state.sync_wanted.notify_one();
-    Ok(())
+    Ok(match outcome.first_sync {
+        Ok(_) => format!("Appairé avec {}, synchro faite.", outcome.host_name),
+        Err(e) => format!(
+            "Appairé avec {}. La première synchro a échoué ({e}), elle sera refaite automatiquement.",
+            outcome.host_name
+        ),
+    })
 }
 
 #[tauri::command]

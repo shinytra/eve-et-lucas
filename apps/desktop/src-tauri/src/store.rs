@@ -206,6 +206,23 @@ impl AppState {
             .map_or_else(|| "Appareil".to_owned(), |d| d.name)
     }
 
+    fn receive_blocking(
+        &self,
+        doc: &str,
+        state: &mut SyncState,
+        message: &[u8],
+    ) -> Result<bool, String> {
+        match doc {
+            NOTES_DOC => self.notes.change("de synchroniser les notes", |d| {
+                d.receive_sync_message(state, message)
+            }),
+            DEVICES_DOC => self.devices.change("de synchroniser les appareils", |d| {
+                d.receive_sync_message(state, message)
+            }),
+            _ => Err(format!("document inconnu : {doc}")),
+        }
+    }
+
     fn with_doc<T>(&self, doc: &str, f: impl FnOnce(&mut dyn Syncable) -> T) -> Result<T, String> {
         match doc {
             NOTES_DOC => Ok(f(&mut *self.notes.lock())),
@@ -226,14 +243,14 @@ impl Store for AppState {
     }
 
     fn receive(&self, doc: &str, state: &mut SyncState, message: &[u8]) -> Result<bool, String> {
-        match doc {
-            NOTES_DOC => self.notes.change("de synchroniser les notes", |d| {
-                d.receive_sync_message(state, message)
-            }),
-            DEVICES_DOC => self.devices.change("de synchroniser les appareils", |d| {
-                d.receive_sync_message(state, message)
-            }),
-            _ => Err(format!("document inconnu : {doc}")),
+        // L'enregistrement (avec fsync) bloque : on prévient le runtime pour
+        // qu'il ne gèle pas les autres tâches pendant ce temps.
+        let multi_thread = tokio::runtime::Handle::try_current()
+            .is_ok_and(|h| h.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread);
+        if multi_thread {
+            tokio::task::block_in_place(|| self.receive_blocking(doc, state, message))
+        } else {
+            self.receive_blocking(doc, state, message)
         }
     }
 
@@ -259,6 +276,12 @@ impl Store for AppState {
 
     fn device_name(&self) -> String {
         AppState::device_name(self)
+    }
+
+    fn pairing_used(&self, accepted: bool) {
+        if let Some(app) = self.app.get() {
+            let _ = app.emit("pairing-used", accepted);
+        }
     }
 
     fn changed(&self, docs: &[String]) {

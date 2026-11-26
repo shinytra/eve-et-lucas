@@ -121,7 +121,9 @@ async fn pairing_then_notes_sync_both_ways() {
     lucas_store.add("Note de Lucas");
 
     let code = pc.start_pairing(TTL).unwrap().encode();
-    let report = lucas.join(&code).await.unwrap();
+    let outcome = lucas.join(&code).await.unwrap();
+    assert_eq!(outcome.host_name, "PC");
+    let report = outcome.first_sync.unwrap();
     assert!(report.changed.contains(&"notes".to_string()));
 
     assert_eq!(pc_store.titles(), ["Note de Lucas", "Note du PC"]);
@@ -221,11 +223,11 @@ async fn pairing_code_is_single_use_and_checked() {
     code.token = "0".repeat(32);
     assert!(matches!(
         intrus.join(&code.encode()).await,
-        Err(SyncError::PairingRefused)
+        Err(SyncError::PairingRefused(_))
     ));
     assert!(matches!(
         lucas.join(&good).await,
-        Err(SyncError::PairingRefused)
+        Err(SyncError::PairingRefused(_))
     ));
 
     // Bon code : accepté une seule fois.
@@ -233,7 +235,7 @@ async fn pairing_code_is_single_use_and_checked() {
     lucas.join(&good).await.unwrap();
     assert!(matches!(
         intrus.join(&good).await,
-        Err(SyncError::PairingRefused)
+        Err(SyncError::PairingRefused(_))
     ));
 
     // Code expiré.
@@ -241,7 +243,7 @@ async fn pairing_code_is_single_use_and_checked() {
     tokio::time::sleep(Duration::from_millis(20)).await;
     assert!(matches!(
         intrus.join(&expired).await,
-        Err(SyncError::PairingRefused)
+        Err(SyncError::PairingRefused(_))
     ));
     pc.shutdown().await;
     lucas.shutdown().await;

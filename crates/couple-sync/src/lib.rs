@@ -38,8 +38,11 @@ pub const PAIR_ALPN: &[u8] = b"eve-et-lucas/pair/1";
 /// Préfixe des codes d'appairage (permet de reconnaître un code et sa version).
 pub const PAIRING_PREFIX: &str = "EL1:";
 
-/// Taille maximale d'un message (protection contre un pair qui enverrait n'importe quoi).
+/// Taille maximale d'un message de synchro (entre appareils appairés).
 const MAX_FRAME: usize = 64 * 1024 * 1024;
+/// Taille maximale d'un message d'appairage : il arrive avant toute
+/// authentification, donc d'un inconnu potentiel.
+const MAX_PAIR_FRAME: usize = 4 * 1024;
 /// Nombre maximal d'allers-retours par document (la synchro converge bien avant).
 const MAX_ROUNDS: usize = 200;
 /// Délai maximal pour une étape réseau.
@@ -54,8 +57,8 @@ pub enum SyncError {
     Network(String),
     #[error("code d'appairage invalide")]
     InvalidCode,
-    #[error("code d'appairage refusé (expiré ou déjà utilisé)")]
-    PairingRefused,
+    #[error("code d'appairage refusé : {0}")]
+    PairingRefused(String),
     #[error("appareil non appairé")]
     UnknownPeer,
     #[error("le pair ne répond pas")]
@@ -97,6 +100,9 @@ pub trait Store: Send + Sync + 'static {
     fn device_name(&self) -> String;
     /// Appelé après qu'une synchro a modifié des documents (pour rafraîchir l'interface).
     fn changed(&self, docs: &[String]);
+    /// Le code d'appairage affiché vient d'être utilisé (accepté ou non) :
+    /// il n'est plus valable.
+    fn pairing_used(&self, _accepted: bool) {}
 }
 
 /// Comment l'appareil se connecte au réseau.
@@ -121,7 +127,8 @@ pub struct PairingCode {
 
 impl PairingCode {
     pub fn encode(&self) -> String {
-        let json = serde_json::to_vec(self).unwrap_or_default();
+        // Sérialiser une adresse et un texte ne peut pas échouer.
+        let json = serde_json::to_vec(self).expect("code d'appairage sérialisable");
         format!(
             "{PAIRING_PREFIX}{}",
             data_encoding::BASE64URL_NOPAD.encode(&json)
@@ -151,6 +158,19 @@ struct PairRequest {
 struct PairResponse {
     accepted: bool,
     name: String,
+    /// Pourquoi l'appairage est refusé.
+    #[serde(default)]
+    reason: Option<String>,
+}
+
+/// Résultat d'un appairage réussi.
+#[derive(Debug)]
+pub struct JoinOutcome {
+    /// Nom de l'appareil rejoint.
+    pub host_name: String,
+    /// Première synchro (l'appairage reste valable même si elle échoue :
+    /// elle sera refaite à la synchro suivante).
+    pub first_sync: Result<SyncReport>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -256,7 +276,7 @@ impl<S: Store> SyncNode<S> {
     }
 
     /// Rejoint l'appareil qui a affiché `code`, puis se synchronise avec lui.
-    pub async fn join(&self, code: &str) -> Result<SyncReport> {
+    pub async fn join(&self, code: &str) -> Result<JoinOutcome> {
         let code = PairingCode::decode(code)?;
         let host_id = code.host.id;
         let conn = timeout(self.router.endpoint().connect(code.host.clone(), PAIR_ALPN))
@@ -273,14 +293,21 @@ impl<S: Store> SyncNode<S> {
         let response: PairResponse = read_json(&mut recv).await?;
         conn.close(0u32.into(), b"ok");
         if !response.accepted {
-            return Err(SyncError::PairingRefused);
+            return Err(SyncError::PairingRefused(
+                response
+                    .reason
+                    .unwrap_or_else(|| "code expiré ou déjà utilisé".to_owned()),
+            ));
         }
         self.shared.addrs().insert(host_id, code.host);
         self.shared
             .store
             .add_peer(host_id, &response.name)
             .map_err(SyncError::Store)?;
-        self.sync_with(host_id).await
+        Ok(JoinOutcome {
+            host_name: response.name,
+            first_sync: self.sync_with(host_id).await,
+        })
     }
 
     /// Se synchronise avec un appareil appairé.
@@ -303,13 +330,12 @@ impl<S: Store> SyncNode<S> {
             let (mut send, mut recv) = conn.open_bi().await.map_err(net)?;
             write_json(&mut send, &DocHeader { doc: doc.clone() }).await?;
             if run_sync(&*self.shared.store, &doc, &mut send, &mut recv, true).await? {
+                // Prévenir tout de suite, même si le document suivant échoue.
+                self.shared.store.changed(std::slice::from_ref(&doc));
                 report.changed.push(doc);
             }
         }
         conn.close(0u32.into(), b"fini");
-        if !report.changed.is_empty() {
-            self.shared.store.changed(&report.changed);
-        }
         Ok(report)
     }
 
@@ -405,6 +431,10 @@ async fn write_frame(send: &mut SendStream, bytes: &[u8]) -> Result<()> {
 
 /// Lit un message ; `None` si le flux est terminé proprement.
 async fn read_frame(recv: &mut RecvStream) -> Result<Option<Vec<u8>>> {
+    read_frame_max(recv, MAX_FRAME).await
+}
+
+async fn read_frame_max(recv: &mut RecvStream, max: usize) -> Result<Option<Vec<u8>>> {
     let mut len = [0u8; 4];
     match timeout(recv.read_exact(&mut len)).await? {
         Ok(()) => {}
@@ -412,7 +442,7 @@ async fn read_frame(recv: &mut RecvStream) -> Result<Option<Vec<u8>>> {
         Err(e) => return Err(net(e)),
     }
     let len = u32::from_be_bytes(len) as usize;
-    if len > MAX_FRAME {
+    if len > max {
         return Err(SyncError::Protocol("message trop gros".into()));
     }
     let mut buf = vec![0u8; len];
@@ -426,7 +456,8 @@ async fn write_json<T: Serialize>(send: &mut SendStream, value: &T) -> Result<()
 }
 
 async fn read_json<T: for<'de> Deserialize<'de>>(recv: &mut RecvStream) -> Result<T> {
-    let frame = read_frame(recv)
+    // Les messages JSON (en-têtes, appairage) sont toujours petits.
+    let frame = read_frame_max(recv, MAX_PAIR_FRAME)
         .await?
         .ok_or_else(|| SyncError::Protocol("flux fermé trop tôt".into()))?;
     serde_json::from_slice(&frame).map_err(|e| SyncError::Protocol(e.to_string()))
@@ -457,6 +488,7 @@ impl<S: Store> ProtocolHandler for SyncHandler<S> {
             if !known_docs.contains(&header.doc) {
                 // Document inconnu (autre version de l'appli) : on l'ignore.
                 let _ = send.finish();
+                let _ = recv.stop(0u32.into());
                 continue;
             }
             match run_sync(&*self.0.store, &header.doc, &mut send, &mut recv, false).await {
@@ -506,18 +538,28 @@ impl<S: Store> ProtocolHandler for PairHandler<S> {
             *pending = None;
             ok
         };
-        let accepted =
-            valid && request.addr.id == peer && self.0.store.add_peer(peer, &request.name).is_ok();
-        if accepted {
+        let refusal = if !valid {
+            Some("code expiré ou déjà utilisé".to_owned())
+        } else if request.addr.id != peer {
+            Some("adresse de l'appareil incohérente".to_owned())
+        } else {
+            self.0.store.add_peer(peer, &request.name).err()
+        };
+        if let Some(reason) = &refusal {
+            eprintln!("Appairage refusé pour {} : {reason}", peer.fmt_short());
+        } else {
             self.0.addrs().insert(peer, request.addr);
         }
+        self.0.store.pairing_used(refusal.is_none());
         let response = PairResponse {
-            accepted,
+            accepted: refusal.is_none(),
             name: self.0.store.device_name(),
+            reason: refusal,
         };
         let _ = write_json(&mut send, &response).await;
         let _ = send.finish();
-        conn.closed().await;
+        // Laisse au pair le temps de lire la réponse, sans le laisser occuper la connexion.
+        let _ = tokio::time::timeout(Duration::from_secs(5), conn.closed()).await;
         Ok(())
     }
 }

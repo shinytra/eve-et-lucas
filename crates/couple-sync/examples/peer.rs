@@ -92,8 +92,15 @@ async fn main() {
     let node = SyncNode::spawn(secret, phone.clone(), Network::Local)
         .await
         .expect("démarrage");
-    let report = node.join(&code).await.expect("appairage");
-    println!("appairage réussi, changé : {:?}", report.changed);
+    let outcome = match node.join(&code).await {
+        Ok(outcome) => outcome,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
+    };
+    println!("appairage réussi avec {}", outcome.host_name);
+    println!("première synchro : {:?}", outcome.first_sync);
     for note in phone.notes.lock().unwrap().list().unwrap() {
         println!("note : {} ({})", note.title, note.author);
     }

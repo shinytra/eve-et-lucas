@@ -51,7 +51,7 @@ let reused = "";
 try { reused = execFileSync(peerBin, [code], { encoding: "utf8", timeout: 60000, stdio: "pipe" }); } catch (e) { reused = String(e.stderr || e); }
 check("le même code est refusé une seconde fois", /refus/i.test(reused));
 
-await call("webview_interact", { action: "click", selector: "#pair-cancel" });
+check("le code utilisé disparaît de l'écran", (await js("(() => document.getElementById('pairing').hidden)()")).includes("true"));
 await js("(() => { document.getElementById('devices-title').scrollIntoView(); return true })()");
 await call("webview_screenshot", { format: "png", filePath: out });
 const logs = await call("read_logs", { source: "console", level: "error" });
