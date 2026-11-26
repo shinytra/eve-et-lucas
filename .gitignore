@@ -5,3 +5,4 @@ node_modules/
 .DS_Store
 *.automerge
 apps/desktop/e2e/capture-e2e.png
+apps/desktop/e2e/captures/

@@ -64,7 +64,7 @@ function render(notes) {
   list.replaceChildren(
     ...notes.map((note) => {
       const li = document.createElement("li");
-      li.className = "note";
+      li.className = "note verre";
 
       const h3 = document.createElement("h3");
       h3.textContent = note.title || "Sans titre";

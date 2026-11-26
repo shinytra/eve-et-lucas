@@ -1,62 +1,252 @@
+/*
+ * Interface « verre dépoli » (glassmorphism).
+ * Toutes les valeurs du thème sont des variables CSS, réglées par
+ * appearance.js à partir des réglages d'apparence (voir couple-core).
+ * Les valeurs ci-dessous sont celles du thème Givre, utilisées tant que
+ * le thème n'est pas chargé.
+ */
 :root {
-  --bg: #fff8f6;
-  --surface: #ffffff;
-  --text: #2b2024;
-  --muted: #7a6a70;
-  --accent: #e85d75;
+  --accent: #5b6cff;
+  --accent-2: #b16cff;
   --accent-text: #ffffff;
-  --border: #f0dde1;
-  --danger: #b3261e;
-  color-scheme: light dark;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --text: #1f2333;
+  --muted: color-mix(in srgb, var(--text) 62%, transparent);
+  --danger: #c62828;
+  --glass-bg: rgba(255, 255, 255, 0.42);
+  --glass-strong: rgba(255, 255, 255, 0.6);
+  --glass-solid: rgba(255, 255, 255, 0.94);
+  --field-bg: rgba(255, 255, 255, 0.5);
+  --blur: 24px;
+  --sat: 180%;
+  --border-width: 1px;
+  --border-color: rgba(255, 255, 255, 0.55);
+  --radius: 20px;
+  --shadow: 0 8px 32px rgba(15, 20, 40, 0.14);
+  --shine: linear-gradient(135deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0) 45%);
+  --gap: 14px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans", sans-serif;
+  --wall-0: #a8c0ff;
+  --wall-1: #fbc2eb;
+  --wall-2: #c2f0e6;
+  --wall-image: none;
+  --wall-blur: 0px;
+  --wall-dim: 0;
+  --grain: 0;
+  color-scheme: light;
+  font-family: var(--font);
+  color: var(--text);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1c1618;
-    --surface: #271f22;
-    --text: #f5e9ec;
-    --muted: #b8a5ab;
-    --accent: #ff7b93;
-    --accent-text: #1c1618;
-    --border: #3a2e32;
-    --danger: #ff8a80;
-  }
+:root[data-sombre] {
+  color-scheme: dark;
+  --danger: #ff8a80;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
+  min-height: 100%;
 }
 
-header {
+body {
+  margin: 0;
+  /* Couleur de secours si le fond ne s'affiche pas. */
+  background: var(--wall-0);
+  color: var(--text);
+  line-height: 1.45;
+  transition: padding-right 0.25s ease;
+}
+
+/* ---------- Fond d'écran ---------- */
+
+#fond {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: var(--wall-0);
+}
+
+#fond > div {
+  position: absolute;
+}
+
+.fond-image {
+  inset: calc(var(--wall-blur) * -2);
+  filter: blur(var(--wall-blur));
+  background-size: cover;
+  background-position: center;
+}
+
+[data-fond="mesh"] .fond-image,
+[data-fond="image"]:not([data-image]) .fond-image {
+  background:
+    radial-gradient(at 15% 15%, var(--wall-0) 0, transparent 55%),
+    radial-gradient(at 85% 20%, var(--wall-1) 0, transparent 50%),
+    radial-gradient(at 50% 95%, var(--wall-2) 0, transparent 60%),
+    color-mix(in srgb, var(--wall-0) 50%, var(--wall-1));
+}
+
+[data-fond="linear"] .fond-image {
+  background: linear-gradient(135deg, var(--wall-0), var(--wall-1) 55%, var(--wall-2));
+}
+
+[data-fond="solid"] .fond-image {
+  background: var(--wall-0);
+}
+
+[data-fond="image"][data-image] .fond-image {
+  background-image: var(--wall-image);
+  background-size: cover;
+  background-position: center;
+}
+
+/* Taches de couleur qui flottent (fond « mesh » seulement). */
+.tache {
+  display: none;
+  width: 55vmax;
+  height: 55vmax;
+  border-radius: 50%;
+  filter: blur(calc(60px + var(--wall-blur)));
+  opacity: 0.75;
+}
+
+[data-fond="mesh"] .tache,
+[data-fond="image"]:not([data-image]) .tache {
+  display: block;
+}
+
+.tache-1 {
+  background: var(--wall-1);
+  top: -15vmax;
+  left: -10vmax;
+}
+
+.tache-2 {
+  background: var(--wall-2);
+  bottom: -20vmax;
+  right: -15vmax;
+}
+
+.tache-3 {
+  background: var(--wall-0);
+  top: 30%;
+  left: 35%;
+  width: 35vmax;
+  height: 35vmax;
+}
+
+[data-anime] .tache-1 {
+  animation: derive-1 24s ease-in-out infinite alternate;
+}
+
+[data-anime] .tache-2 {
+  animation: derive-2 30s ease-in-out infinite alternate;
+}
+
+[data-anime] .tache-3 {
+  animation: derive-3 36s ease-in-out infinite alternate;
+}
+
+@keyframes derive-1 {
+  to {
+    transform: translate(25vw, 20vh) scale(1.15);
+  }
+}
+
+@keyframes derive-2 {
+  to {
+    transform: translate(-30vw, -15vh) scale(0.9);
+  }
+}
+
+@keyframes derive-3 {
+  to {
+    transform: translate(-25vw, 25vh) scale(1.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tache {
+    animation: none !important;
+  }
+}
+
+.fond-voile {
+  inset: 0;
+  background: rgba(0, 0, 0, var(--wall-dim));
+}
+
+.fond-grain {
+  inset: 0;
+  opacity: var(--grain);
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- Verre ---------- */
+
+.verre {
+  background-color: var(--glass-bg);
+  background-image: var(--shine);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(var(--sat));
+  backdrop-filter: blur(var(--blur)) saturate(var(--sat));
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* Sans flou d'arrière-plan (vieux WebView), le verre devient plus opaque. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .verre {
+    background-color: var(--glass-strong);
+  }
+}
+
+/* ---------- Mise en page ---------- */
+
+.barre {
+  position: sticky;
+  top: calc(var(--gap) * 0.75);
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 16px;
-  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: var(--gap);
+  max-width: 760px;
+  margin: calc(var(--gap) * 0.75) auto 0;
+  padding: calc(var(--gap) * 0.75) var(--gap);
+  width: calc(100% - 2 * var(--gap) * 0.75);
+}
+
+.barre-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 h1 {
   margin: 0;
   font-size: 1.4rem;
-  color: var(--accent);
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 h2 {
   font-size: 1.1rem;
+  margin: calc(var(--gap) * 1.5) 0 var(--gap);
 }
 
 main {
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
-  padding: 16px;
+  padding: var(--gap);
 }
 
 input,
@@ -72,9 +262,36 @@ textarea,
 select {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) * 0.6);
+  background: var(--field-bg);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+select option {
+  color: initial;
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%23888' stroke-width='2'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  cursor: pointer;
 }
 
 .who select {
@@ -84,7 +301,11 @@ select {
 
 form {
   display: grid;
-  gap: 8px;
+  gap: calc(var(--gap) * 0.6);
+}
+
+#note-form {
+  padding: var(--gap);
 }
 
 textarea {
@@ -94,25 +315,49 @@ textarea {
 .actions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 button {
   padding: 8px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-color);
   border-radius: 999px;
-  background: var(--surface);
+  background: var(--field-bg);
   cursor: pointer;
+  transition: transform 0.1s ease, filter 0.15s ease;
 }
 
-button[type="submit"] {
-  background: var(--accent);
-  border-color: var(--accent);
+button:hover {
+  filter: brightness(1.06);
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+button.principal {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
   color: var(--accent-text);
+  font-weight: 600;
 }
 
 button.danger {
   color: var(--danger);
+}
+
+button.icone {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
 }
 
 #error {
@@ -125,14 +370,11 @@ button.danger {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 12px;
+  gap: var(--gap);
 }
 
 .note {
-  padding: 12px 16px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface);
+  padding: calc(var(--gap) * 0.85) var(--gap);
 }
 
 .note h3 {
@@ -147,8 +389,387 @@ button.danger {
 }
 
 .note .meta,
-#empty {
+.aide {
   margin: 0;
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+#empty {
+  margin: 0;
+  padding: var(--gap);
+  color: var(--muted);
+}
+
+/* ---------- Écran des réglages ---------- */
+
+.panneau {
+  position: fixed;
+  z-index: 10;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  width: min(400px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  background-color: var(--glass-strong);
+  overflow: hidden;
+  animation: entree 0.22s ease-out;
+}
+
+@keyframes entree {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+.panneau[hidden] {
+  display: none;
+}
+
+/* Sur grand écran, le contenu se décale : on voit le résultat en direct. */
+@media (min-width: 900px) {
+  body.reglages-ouverts {
+    padding-right: 412px;
+  }
+}
+
+/* Quand les réglages recouvrent le contenu, le verre devient presque opaque
+   pour rester lisible. */
+@media (max-width: 899px) {
+  .panneau {
+    background-color: var(--glass-solid);
+  }
+}
+
+/* Sur téléphone, les réglages prennent tout l'écran. */
+@media (max-width: 599px) {
+  .panneau {
+    inset: 0;
+    width: 100%;
+    border-radius: 0;
+    border-width: 0;
+  }
+}
+
+.panneau-tete,
+.panneau-pied {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.panneau-tete h2 {
+  margin: 0;
+}
+
+.panneau-pied {
+  border-top: 1px solid var(--border-color);
+}
+
+.panneau-pied button {
+  flex: 0 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%;
+}
+
+#settings-status {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  min-height: 1.2em;
+}
+
+#settings-status.erreur {
+  color: var(--danger);
+}
+
+.onglets {
+  display: flex;
+  gap: 4px;
+  padding: 0 12px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.onglets button {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  background: transparent;
+  border-color: transparent;
+}
+
+.onglets button[aria-selected="true"] {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.panneau-corps {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 16px 16px;
+}
+
+.panneau-corps h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 16px 0 8px;
+}
+
+.panneau-corps textarea {
+  font-size: 0.8rem;
+  font-family: ui-monospace, monospace;
+  margin-bottom: 8px;
+}
+
+.ligne {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ligne input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Cartes des préréglages, chacune avec son propre aperçu. */
+.grille-themes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.carte-theme {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  padding: 6px 6px 8px;
+  border-radius: 16px;
+  text-align: left;
+  background: var(--field-bg);
+}
+
+.carte-theme[aria-pressed="true"] {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.apercu {
+  position: relative;
+  height: 74px;
+  border-radius: 12px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.apercu-verre {
+  width: 72%;
+  padding: 6px 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.apercu-verre i {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+}
+
+.carte-theme strong {
+  font-size: 0.9rem;
+  padding: 0 4px;
+}
+
+.carte-theme small {
+  font-size: 0.75rem;
+  color: var(--muted);
+  padding: 0 4px;
+  line-height: 1.3;
+}
+
+.badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.liste-themes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.liste-themes li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 8px;
+  border-radius: 14px;
+  background: var(--field-bg);
+}
+
+.liste-themes .pastille {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+.liste-themes span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liste-themes button {
+  padding: 4px 10px;
+  font-size: 0.85rem;
+}
+
+/* Un réglage : libellé + valeur + contrôle. */
+.reglage {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+
+.reglage-tete {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.95rem;
+}
+
+.reglage-tete output {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+input[type="range"] {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--accent);
+  height: 28px;
+}
+
+.couleurs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.couleurs button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+}
+
+.couleurs button[aria-pressed="true"] {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+input[type="color"] {
+  width: 44px;
+  height: 32px;
+  padding: 2px;
+  cursor: pointer;
+}
+
+/* Choix parmi quelques options (police, densité, type de fond). */
+.choix {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 6px;
+}
+
+.choix button {
+  border-radius: 12px;
+  padding: 8px 6px;
+  font-size: 0.88rem;
+}
+
+.choix button[aria-pressed="true"] {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--accent-text);
+  border-color: transparent;
+}
+
+.choix .grand {
+  font-size: 1.15rem;
+  display: block;
+}
+
+/* Interrupteur. */
+.interrupteur {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 14px;
+  cursor: pointer;
+}
+
+.interrupteur input {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 26px;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--field-bg);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.interrupteur input::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s;
+}
+
+.interrupteur input:checked {
+  background: var(--accent);
+}
+
+.interrupteur input:checked::after {
+  transform: translateX(20px);
 }

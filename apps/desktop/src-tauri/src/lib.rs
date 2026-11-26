@@ -15,6 +15,8 @@ use std::{
 use couple_core::{Note, NotesDoc};
 use tauri::{Manager, State};
 
+mod appearance;
+
 const NOTES_FILE: &str = "notes.automerge";
 
 struct AppState {
@@ -181,6 +183,7 @@ pub fn run() {
             app.add_capability(include_str!("../capabilities-dev/mcp-bridge.json"))?;
             let data_dir = app.path().app_data_dir()?;
             app.manage(AppState::load(&data_dir)?);
+            app.manage(appearance::AppearanceState::load(&data_dir)?);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -188,7 +191,17 @@ pub fn run() {
             startup_warning,
             add_note,
             update_note,
-            delete_note
+            delete_note,
+            appearance::get_appearance,
+            appearance::set_appearance,
+            appearance::apply_preset,
+            appearance::save_theme,
+            appearance::apply_saved_theme,
+            appearance::delete_theme,
+            appearance::export_theme,
+            appearance::import_theme,
+            appearance::get_wallpaper,
+            appearance::set_wallpaper,
         ])
         .run(tauri::generate_context!());
 
