@@ -34,7 +34,7 @@ const SCHEDULE_DAYS: i64 = 60;
 const FILE: &str = "rappels-dates.json";
 
 /// La date du jour et l'heure, dans le fuseau de l'appareil.
-fn local_today() -> (Day, u32) {
+pub(crate) fn local_today() -> (Day, u32) {
     let now = jiff::ZonedDateTime::now();
     let day = Day::new(
         i32::from(now.year()),
@@ -69,10 +69,11 @@ fn notification_key(reminder: &DateReminder) -> i32 {
     notification_id(&format!("date:{}", reminder.key()))
 }
 
-/// Prévient la synchro et les rappels qu'une date a changé.
+/// Prévient la synchro, les rappels et le widget qu'une date a changé.
 fn changed(state: &AppState) {
     state.sync_wanted.notify_one();
     state.dates_wanted.notify_one();
+    state.widget_wanted.notify_one();
 }
 
 /// Dernier nombre d'entrées illisibles signalé (pour ne pas le répéter).

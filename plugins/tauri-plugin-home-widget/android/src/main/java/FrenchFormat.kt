@@ -79,4 +79,54 @@ object FrenchFormat {
     }
     return "$who $verb $day"
   }
+
+  /** Le jour existe (mois de 1 à 12 ; le 29 février seulement les années bissextiles). */
+  fun isValidDay(year: Int, month: Int, day: Int): Boolean {
+    if (year !in 1900..2200 || month !in 1..12 || day < 1) return false
+    val cal = Calendar.getInstance()
+    cal.clear()
+    cal.set(year, month - 1, 1)
+    return day <= cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+  }
+
+  /** Nombre de jours entre le jour de `now` et le jour donné (mois de 1 à 12). */
+  fun daysUntil(year: Int, month: Int, day: Int, now: Long): Int {
+    val cal = Calendar.getInstance()
+    cal.clear()
+    cal.set(year, month - 1, day, 12, 0, 0)
+    return dayOffset(cal.timeInMillis, now)
+  }
+
+  /** Prochain minuit local après `now`. */
+  fun nextMidnight(now: Long): Long {
+    val cal = calendar(now)
+    cal.set(Calendar.HOUR_OF_DAY, 0)
+    cal.set(Calendar.MINUTE, 0)
+    cal.set(Calendar.SECOND, 0)
+    cal.set(Calendar.MILLISECOND, 0)
+    cal.add(Calendar.DAY_OF_MONTH, 1)
+    return cal.timeInMillis
+  }
+
+  /**
+   * « 🎂 Dans 12 jours : Anniversaire d'Eve (25 ans) », « 💞 Demain : Nous
+   * (6 ans) », « 🎉 Aujourd'hui : Noël ». Mêmes mots que les titres des
+   * rappels (`reminder` dans `couple_core::dates`) : changer les deux ensemble.
+   * Le compte à rebours vient avant le titre pour rester visible si le titre
+   * est coupé. `null` si la date est passée (appli pas ouverte depuis).
+   */
+  fun countdown(emoji: String, title: String, years: Int?, daysLeft: Int): String? {
+    val whenText = when {
+      daysLeft < 0 -> return null
+      daysLeft == 0 -> "Aujourd'hui"
+      daysLeft == 1 -> "Demain"
+      else -> "Dans $daysLeft jours"
+    }
+    val age = when {
+      years == null || years <= 0 -> ""
+      years == 1 -> " (1 an)"
+      else -> " ($years ans)"
+    }
+    return "$emoji $whenText : $title$age"
+  }
 }

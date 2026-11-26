@@ -285,7 +285,8 @@ impl ImportantDate {
         self.year.map(|y| on.year - y).filter(|n| *n > 0)
     }
 
-    fn emoji(&self) -> &'static str {
+    /// Petit dessin du type de date (« 🎂 » pour un anniversaire…).
+    pub fn emoji(&self) -> &'static str {
         match self.kind() {
             KIND_COUPLE => "💞",
             KIND_BIRTHDAY => "🎂",

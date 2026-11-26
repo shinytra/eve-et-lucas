@@ -1,5 +1,6 @@
 package fr.eveetlucas.homewidget
 
+import android.app.AlarmManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
@@ -33,7 +34,32 @@ object HomeWidgetUpdater {
     }
     // La liste est fournie à part (HomeWidgetService) : on lui demande de se relire.
     manager.notifyAppWidgetViewDataChanged(ids, R.id.home_widget_list)
+    scheduleMidnight(context, ids, now)
   }
+
+  /**
+   * Redessine le widget au prochain minuit (compte à rebours, « hier »), même
+   * appli fermée. Alarme non exacte et sans réveil (`RTC`) : si le téléphone
+   * dort, elle part quand l'écran se rallume, sans permission particulière.
+   * Chaque dessin remplace l'alarme précédente.
+   */
+  private fun scheduleMidnight(context: Context, ids: IntArray, now: Long) {
+    val alarms = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+    val intent = Intent(context, HomeWidgetProvider::class.java)
+    intent.action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+    intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
+    val pending = PendingIntent.getBroadcast(
+      context,
+      MIDNIGHT_REQUEST,
+      intent,
+      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+    // Une seconde après minuit, pour tomber sûrement sur le nouveau jour.
+    alarms.setWindow(AlarmManager.RTC, FrenchFormat.nextMidnight(now) + 1_000, 60_000, pending)
+  }
+
+  /** Code de la demande de l'alarme de minuit (0 sert à ouvrir l'appli et aux cases). */
+  private const val MIDNIGHT_REQUEST = 1
 
   @Suppress("DEPRECATION")
   private fun buildViews(
@@ -65,6 +91,22 @@ object HomeWidgetUpdater {
       views.setViewVisibility(R.id.home_widget_arrival, View.VISIBLE)
     } else {
       views.setViewVisibility(R.id.home_widget_arrival, View.GONE)
+    }
+
+    // Première date pas encore passée (l'appli a pu rester fermée depuis l'envoi).
+    val dateText = content?.nextDates.orEmpty().firstNotNullOfOrNull {
+      FrenchFormat.countdown(
+        it.emoji,
+        it.title,
+        it.years,
+        FrenchFormat.daysUntil(it.year, it.month, it.day, now)
+      )
+    }
+    if (dateText != null) {
+      views.setTextViewText(R.id.home_widget_date, dateText)
+      views.setViewVisibility(R.id.home_widget_date, View.VISIBLE)
+    } else {
+      views.setViewVisibility(R.id.home_widget_date, View.GONE)
     }
 
     // Liste des tâches. Une donnée propre à chaque widget dans l'intent, pour
