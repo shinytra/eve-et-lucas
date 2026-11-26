@@ -198,7 +198,13 @@ impl Appearance {
     /// Code texte à copier pour partager ce thème (avec l'autre téléphone,
     /// par message…). L'image de fond n'en fait pas partie.
     pub fn to_code(&self) -> Result<String> {
-        let json = serde_json::to_string(self).map_err(|e| Error::InvalidTheme(e.to_string()))?;
+        let mut shared = self.clone();
+        // L'image reste sur cet appareil : l'autre reçoit le fond par défaut.
+        if shared.wallpaper == WallpaperKind::Image {
+            shared.wallpaper = WallpaperKind::Mesh;
+        }
+        let json =
+            serde_json::to_string(&shared).map_err(|e| Error::InvalidTheme(e.to_string()))?;
         Ok(format!("{CODE_PREFIX}{json}"))
     }
 
@@ -342,7 +348,10 @@ impl AppearanceSettings {
         let mut settings: Self =
             serde_json::from_slice(bytes).map_err(|e| Error::InvalidTheme(e.to_string()))?;
         settings.current = settings.current.sanitized();
-        settings.saved.retain(|t| !t.id.is_empty());
+        let mut seen = std::collections::HashSet::new();
+        settings
+            .saved
+            .retain(|t| !t.id.is_empty() && seen.insert(t.id.clone()));
         settings.saved.truncate(MAX_SAVED_THEMES);
         for theme in &mut settings.saved {
             theme.appearance = theme.appearance.clone().sanitized();
@@ -420,7 +429,8 @@ fn clean_name(name: &str) -> Result<String> {
     if name.is_empty() {
         return Err(Error::EmptyThemeName);
     }
-    Ok(name.chars().take(MAX_THEME_NAME).collect())
+    let name: String = name.chars().take(MAX_THEME_NAME).collect();
+    Ok(name.trim_end().to_owned())
 }
 
 /// Vérifie une image de fond envoyée par l'interface : une data URL JPEG,
@@ -892,5 +902,43 @@ mod tests {
         }
         let huge = format!("data:image/png;base64,{}", "A".repeat(MAX_WALLPAPER_BYTES));
         assert!(validate_wallpaper(&huge).is_err());
+    }
+
+    #[test]
+    fn shared_code_never_asks_for_the_image() {
+        let mine = Appearance {
+            wallpaper: WallpaperKind::Image,
+            ..Appearance::default()
+        };
+        let received = Appearance::from_code(&mine.to_code().unwrap()).unwrap();
+        assert_eq!(received.wallpaper, WallpaperKind::Mesh);
+    }
+
+    #[test]
+    fn theme_names_are_trimmed_after_truncation() {
+        let name = format!("{} y", "a".repeat(MAX_THEME_NAME - 1));
+        assert_eq!(clean_name(&name).unwrap(), "a".repeat(MAX_THEME_NAME - 1));
+    }
+
+    #[test]
+    fn duplicate_theme_ids_are_dropped_on_load() {
+        let theme = SavedTheme {
+            id: "t1".into(),
+            name: "Un".into(),
+            appearance: Appearance::default(),
+        };
+        let settings = AppearanceSettings {
+            saved: vec![
+                theme.clone(),
+                SavedTheme {
+                    name: "Deux".into(),
+                    ..theme
+                },
+            ],
+            ..AppearanceSettings::default()
+        };
+        let loaded = AppearanceSettings::from_json(&settings.to_json().unwrap()).unwrap();
+        assert_eq!(loaded.saved.len(), 1);
+        assert_eq!(loaded.saved[0].name, "Un");
     }
 }
