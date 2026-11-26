@@ -1559,6 +1559,7 @@ dependencies = [
  "time",
  "tokio",
  "uuid",
+ "webpki-roots",
 ]
 
 [[package]]

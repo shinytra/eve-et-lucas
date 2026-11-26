@@ -8,7 +8,7 @@ use std::{
 };
 
 use couple_core::{
-    ArrivalsDoc, DevicesDoc, FilesDoc, NotesDoc, PushDoc, SyncState, Syncable, TasksDoc,
+    AnimesDoc, ArrivalsDoc, DevicesDoc, FilesDoc, NotesDoc, PushDoc, SyncState, Syncable, TasksDoc,
 };
 use couple_sync::{
     iroh::{EndpointId, SecretKey},
@@ -67,6 +67,15 @@ impl Persist for PushDoc {
     }
     fn save(&mut self) -> Vec<u8> {
         PushDoc::save(self)
+    }
+}
+
+impl Persist for AnimesDoc {
+    fn load(bytes: &[u8]) -> couple_core::Result<Self> {
+        AnimesDoc::load(bytes)
+    }
+    fn save(&mut self) -> Vec<u8> {
+        AnimesDoc::save(self)
     }
 }
 
@@ -194,6 +203,7 @@ pub const FILES_DOC: &str = "files";
 pub const ARRIVALS_DOC: &str = "arrivals";
 pub const PUSH_DOC: &str = "push";
 pub const DEVICES_DOC: &str = "devices";
+pub const ANIMES_DOC: &str = "animes";
 /// Sur téléphone : taille maximale d'une image téléchargée sans le demander.
 const AUTO_DOWNLOAD_MAX: u64 = 10 * 1024 * 1024;
 
@@ -205,6 +215,8 @@ pub struct AppState {
     pub arrivals: Persisted<ArrivalsDoc>,
     /// Clé et adresses du réveil par ntfy.
     pub push: Persisted<PushDoc>,
+    /// Animés regardés ensemble.
+    pub animes: Persisted<AnimesDoc>,
     pub devices: Persisted<DevicesDoc>,
     /// Messages à montrer au démarrage (fichier illisible, etc.).
     pub startup_warnings: Vec<String>,
@@ -226,6 +238,8 @@ pub struct AppState {
     pub push_wanted: Notify,
     /// Réveille la boucle des téléchargements de fichiers.
     pub downloads_wanted: Notify,
+    /// Réveille le téléchargement des affiches des animés.
+    pub animes_wanted: Notify,
     /// Réveille la mise à jour du widget (téléphone).
     pub widget_wanted: Notify,
     /// Empêche le ménage des contenus pendant qu'un fichier est partagé
@@ -244,6 +258,7 @@ impl AppState {
         let files = Persisted::load(data_dir.join("files.automerge"), &mut startup_warnings)?;
         let arrivals = Persisted::load(data_dir.join("arrivals.automerge"), &mut startup_warnings)?;
         let push = Persisted::load(data_dir.join("push.automerge"), &mut startup_warnings)?;
+        let animes = Persisted::load(data_dir.join("animes.automerge"), &mut startup_warnings)?;
         let devices = Persisted::load(data_dir.join("devices.automerge"), &mut startup_warnings)?;
         let secret = load_or_create_key(&data_dir.join("device.key"))?;
         let self_id = secret.public();
@@ -253,6 +268,7 @@ impl AppState {
             files,
             arrivals,
             push,
+            animes,
             devices,
             startup_warnings,
             notices: Mutex::new(Vec::new()),
@@ -265,6 +281,7 @@ impl AppState {
             arrivals_wanted: Notify::new(),
             push_wanted: Notify::new(),
             widget_wanted: Notify::new(),
+            animes_wanted: Notify::new(),
             blob_guard: tokio::sync::Mutex::new(()),
             app: OnceLock::new(),
         };
@@ -323,6 +340,9 @@ impl AppState {
             PUSH_DOC => self.push.change("de synchroniser le réveil", |d| {
                 d.receive_sync_message(state, message)
             }),
+            ANIMES_DOC => self.animes.change("de synchroniser les animés", |d| {
+                d.receive_sync_message(state, message)
+            }),
             DEVICES_DOC => self.devices.change("de synchroniser les appareils", |d| {
                 d.receive_sync_message(state, message)
             }),
@@ -337,6 +357,7 @@ impl AppState {
             FILES_DOC => Ok(f(&mut *self.files.lock())),
             ARRIVALS_DOC => Ok(f(&mut *self.arrivals.lock())),
             PUSH_DOC => Ok(f(&mut *self.push.lock())),
+            ANIMES_DOC => Ok(f(&mut *self.animes.lock())),
             DEVICES_DOC => Ok(f(&mut *self.devices.lock())),
             _ => Err(format!("document inconnu : {doc}")),
         }
@@ -353,6 +374,7 @@ impl Store for AppState {
             FILES_DOC.into(),
             ARRIVALS_DOC.into(),
             PUSH_DOC.into(),
+            ANIMES_DOC.into(),
         ]
     }
 
@@ -435,6 +457,9 @@ impl Store for AppState {
         }
         if docs.iter().any(|d| d == FILES_DOC) {
             self.downloads_wanted.notify_one();
+        }
+        if docs.iter().any(|d| d == ANIMES_DOC) {
+            self.animes_wanted.notify_one();
         }
         if let Some(app) = self.app.get() {
             if let Err(e) = app.emit("docs-changed", docs) {
@@ -552,7 +577,17 @@ pub(crate) mod tests {
             .change("d'ajouter", |d| d.add("Lucas", "Pain", "", Some(5), 1))
             .unwrap();
 
-        for doc in [NOTES_DOC, TASKS_DOC] {
+        pc.animes
+            .change("d'ajouter", |d| {
+                let info = couple_core::AnimeInfo {
+                    title: "Frieren".to_owned(),
+                    ..Default::default()
+                };
+                d.add("Eve", info, 1)
+            })
+            .unwrap();
+
+        for doc in [NOTES_DOC, TASKS_DOC, ANIMES_DOC] {
             let (mut s_pc, mut s_phone) = (SyncState::new(), SyncState::new());
             for _ in 0..10 {
                 let m1 = pc.generate(doc, &mut s_pc).unwrap();
@@ -571,6 +606,7 @@ pub(crate) mod tests {
         let reloaded = AppState::load(&b, "Téléphone").unwrap();
         assert_eq!(reloaded.notes.lock().list().unwrap().len(), 1);
         assert_eq!(reloaded.tasks.lock().list().len(), 1);
+        assert_eq!(reloaded.animes.lock().list().len(), 1);
         assert!(phone.generate("inconnu", &mut SyncState::new()).is_err());
         fs::remove_dir_all(a).unwrap();
         fs::remove_dir_all(b).unwrap();
