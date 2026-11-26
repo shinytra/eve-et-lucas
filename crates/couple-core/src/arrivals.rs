@@ -77,10 +77,27 @@ impl ArrivalsDoc {
     /// de 5 minutes après la précédente est ignorée (le GPS qui hésite au
     /// bord de la zone ne doit pas faire sonner deux fois) : renvoie `None`.
     pub fn add(&mut self, who: &str, device: &str, at: i64) -> Result<Option<Arrival>> {
+        self.add_with_id(&uuid::Uuid::new_v4().to_string(), who, device, at)
+    }
+
+    /// Comme [`ArrivalsDoc::add`], avec un identifiant déjà choisi : celui
+    /// donné par Android au moment de l'arrivée, ou celui d'un message de
+    /// réveil reçu. Ainsi l'arrivée annoncée par ntfy et celle reçue plus
+    /// tard par la synchro sont la même. Déjà connue : renvoie `None`.
+    pub fn add_with_id(
+        &mut self,
+        id: &str,
+        who: &str,
+        device: &str,
+        at: i64,
+    ) -> Result<Option<Arrival>> {
         const DEBOUNCE_MS: i64 = 5 * 60 * 1000;
         let who = who.trim();
         if who.is_empty() {
             return Err(Error::MissingAuthor);
+        }
+        if id.is_empty() || id.chars().count() > 64 || self.doc.get(ROOT, id)?.is_some() {
+            return Ok(None);
         }
         let duplicate = self
             .list()
@@ -90,7 +107,7 @@ impl ArrivalsDoc {
             return Ok(None);
         }
         let arrival = Arrival {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: id.to_owned(),
             who: who.to_owned(),
             device: device.to_owned(),
             at,
@@ -207,6 +224,30 @@ mod tests {
         // Celle d'Eve, plus ancienne, arrive ensuite : elle sonne aussi.
         pc.merge(&mut tel_eve).unwrap();
         assert_eq!(ids(pc.to_ring("pc", &rung, now)), vec![eve.id]);
+    }
+
+    #[test]
+    fn arrival_announced_by_push_then_synced_is_the_same() {
+        let mut pc = ArrivalsDoc::new();
+        let mut phone = pc.fork();
+        // Le téléphone enregistre l'arrivée avec l'identifiant choisi par Android…
+        let a = phone
+            .add_with_id("id-1", "Eve", "tel-eve", 10 * MIN)
+            .unwrap()
+            .unwrap();
+        // … et le PC la reçoit d'abord par ntfy, avec le même identifiant.
+        pc.add_with_id(&a.id, &a.who, &a.device, a.at)
+            .unwrap()
+            .unwrap();
+        assert!(pc
+            .add_with_id(&a.id, "Eve", "tel-eve", a.at)
+            .unwrap()
+            .is_none());
+        pc.merge(&mut phone).unwrap();
+        phone.merge(&mut pc).unwrap();
+        assert_eq!(pc.list(), vec![a.clone()]);
+        assert_eq!(phone.list(), vec![a]);
+        assert!(pc.add_with_id("", "Eve", "x", 0).unwrap().is_none());
     }
 
     #[test]

@@ -37,6 +37,9 @@ tauri-plugin-mcp-bridge = { version = "=0.13.2", optional = true }
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2.5"
 tauri-plugin-single-instance = "2.3"
+# Écoute du réveil par ntfy (déjà utilisés par iroh, mêmes options).
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 
 # Seulement sur téléphone : scanner le QR code d'appairage.
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]

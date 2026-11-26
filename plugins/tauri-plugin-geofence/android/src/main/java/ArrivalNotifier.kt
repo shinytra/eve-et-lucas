@@ -18,6 +18,8 @@ import androidx.core.app.NotificationManagerCompat
 object ArrivalNotifier {
   const val CHANNEL_ID = "arrivee"
   private const val NOTIFICATION_ID = 4242
+  /** Arrivées des autres : une notification par arrivée (étiquette = identifiant). */
+  private const val RECEIVED_NOTIFICATION_ID = 4243
 
   /** Durée de la sonnerie quand « sonner à l'arrivée » est activé. */
   private const val RING_DURATION_MS = 5_000L
@@ -29,12 +31,30 @@ object ArrivalNotifier {
       "Arrivée à la maison",
       NotificationManager.IMPORTANCE_HIGH
     )
-    channel.description = "Prévient quand ce téléphone arrive à la maison."
+    channel.description = "Prévient quand vous ou l'autre arrivez à la maison."
     val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     manager.createNotificationChannel(channel)
   }
 
   fun show(context: Context) {
+    notify(context, null, NOTIFICATION_ID, "Arrivée à la maison", "Bienvenue à la maison !")
+  }
+
+  /**
+   * Arrivée d'un autre appareil reçue par ntfy : notification avec le son du
+   * canal « Arrivée à la maison », même appli fermée.
+   */
+  fun showReceived(context: Context, arrival: ArrivalMessage) {
+    notify(
+      context,
+      arrival.id,
+      RECEIVED_NOTIFICATION_ID,
+      "${arrival.who} arrive à la maison",
+      "Détecté par son téléphone à l'approche de la maison"
+    )
+  }
+
+  private fun notify(context: Context, tag: String?, id: Int, title: String, text: String) {
     createChannel(context)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
       !GeofenceRegistrar.hasPermission(context, Manifest.permission.POST_NOTIFICATIONS)
@@ -44,10 +64,12 @@ object ArrivalNotifier {
     }
     val builder = NotificationCompat.Builder(context, CHANNEL_ID)
       .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-      .setContentTitle("Arrivée à la maison")
-      .setContentText("Bienvenue à la maison !")
+      .setContentTitle(title)
+      .setContentText(text)
       .setPriority(NotificationCompat.PRIORITY_HIGH)
       .setCategory(NotificationCompat.CATEGORY_STATUS)
+      // Avant Android 8 (pas de canal) : son et vibration par défaut.
+      .setDefaults(NotificationCompat.DEFAULT_ALL)
       .setAutoCancel(true)
     // Toucher la notification ouvre l'appli.
     context.packageManager.getLaunchIntentForPackage(context.packageName)?.let { launch ->
@@ -55,7 +77,7 @@ object ArrivalNotifier {
       builder.setContentIntent(PendingIntent.getActivity(context, 0, launch, flags))
     }
     try {
-      NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
+      NotificationManagerCompat.from(context).notify(tag, id, builder.build())
     } catch (e: SecurityException) {
       Log.w(TAG, "Notification d'arrivée refusée par Android", e)
     }

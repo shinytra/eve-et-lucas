@@ -8,6 +8,7 @@ pub mod arrivals;
 pub mod devices;
 pub mod files;
 pub mod notes;
+pub mod push;
 pub mod sync;
 pub mod tasks;
 pub mod widget;
@@ -16,6 +17,7 @@ pub use arrivals::{Arrival, ArrivalsDoc};
 pub use devices::{Device, DevicesDoc};
 pub use files::{FilesDoc, SharedFile};
 pub use notes::{Note, NotesDoc};
+pub use push::{PushDoc, PushMessage};
 pub use sync::{SyncState, Syncable};
 pub use tasks::{Task, TasksDoc};
 pub use widget::{WidgetAction, WidgetData};
@@ -23,6 +25,10 @@ pub use widget::{WidgetAction, WidgetData};
 /// Erreurs du cœur.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("adresse de réveil invalide (https uniquement, 500 caractères au plus)")]
+    InvalidEndpoint,
+    #[error("message de réveil illisible ou falsifié")]
+    InvalidPush,
     #[error("la note {0} n'existe pas")]
     NoteNotFound(String),
     #[error("une note doit avoir un titre ou un contenu")]

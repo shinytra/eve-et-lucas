@@ -18,6 +18,7 @@ mod arrivals;
 #[cfg(desktop)]
 mod desktop;
 mod files;
+mod push;
 mod reminders;
 mod store;
 mod sync;
@@ -157,7 +158,8 @@ pub fn run() {
             sync::start(app.handle(), state.clone());
             reminders::start(app.handle(), state.clone());
             arrivals::start(app.handle(), state.clone());
-            widget::start(app.handle(), state);
+            widget::start(app.handle(), state.clone());
+            push::start(app.handle(), state);
             #[cfg(desktop)]
             desktop::setup(app)?;
             Ok(())

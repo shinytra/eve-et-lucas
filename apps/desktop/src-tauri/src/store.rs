@@ -7,7 +7,9 @@ use std::{
     sync::{Mutex, MutexGuard, OnceLock},
 };
 
-use couple_core::{ArrivalsDoc, DevicesDoc, FilesDoc, NotesDoc, SyncState, Syncable, TasksDoc};
+use couple_core::{
+    ArrivalsDoc, DevicesDoc, FilesDoc, NotesDoc, PushDoc, SyncState, Syncable, TasksDoc,
+};
 use couple_sync::{
     iroh::{EndpointId, SecretKey},
     Store,
@@ -56,6 +58,15 @@ impl Persist for ArrivalsDoc {
     }
     fn save(&mut self) -> Vec<u8> {
         ArrivalsDoc::save(self)
+    }
+}
+
+impl Persist for PushDoc {
+    fn load(bytes: &[u8]) -> couple_core::Result<Self> {
+        PushDoc::load(bytes)
+    }
+    fn save(&mut self) -> Vec<u8> {
+        PushDoc::save(self)
     }
 }
 
@@ -181,6 +192,7 @@ pub const NOTES_DOC: &str = "notes";
 pub const TASKS_DOC: &str = "tasks";
 pub const FILES_DOC: &str = "files";
 pub const ARRIVALS_DOC: &str = "arrivals";
+pub const PUSH_DOC: &str = "push";
 pub const DEVICES_DOC: &str = "devices";
 /// Sur téléphone : taille maximale d'une image téléchargée sans le demander.
 const AUTO_DOWNLOAD_MAX: u64 = 10 * 1024 * 1024;
@@ -191,6 +203,8 @@ pub struct AppState {
     pub tasks: Persisted<TasksDoc>,
     pub files: Persisted<FilesDoc>,
     pub arrivals: Persisted<ArrivalsDoc>,
+    /// Clé et adresses du réveil par ntfy.
+    pub push: Persisted<PushDoc>,
     pub devices: Persisted<DevicesDoc>,
     /// Messages à montrer au démarrage (fichier illisible, etc.).
     pub startup_warnings: Vec<String>,
@@ -208,6 +222,8 @@ pub struct AppState {
     pub reminders_wanted: Notify,
     /// Réveille la boucle qui fait sonner à l'arrivée de l'autre.
     pub arrivals_wanted: Notify,
+    /// Réveille la mise à jour du réveil par ntfy (clé, adresses).
+    pub push_wanted: Notify,
     /// Réveille la boucle des téléchargements de fichiers.
     pub downloads_wanted: Notify,
     /// Réveille la mise à jour du widget (téléphone).
@@ -227,6 +243,7 @@ impl AppState {
         let tasks = Persisted::load(data_dir.join("tasks.automerge"), &mut startup_warnings)?;
         let files = Persisted::load(data_dir.join("files.automerge"), &mut startup_warnings)?;
         let arrivals = Persisted::load(data_dir.join("arrivals.automerge"), &mut startup_warnings)?;
+        let push = Persisted::load(data_dir.join("push.automerge"), &mut startup_warnings)?;
         let devices = Persisted::load(data_dir.join("devices.automerge"), &mut startup_warnings)?;
         let secret = load_or_create_key(&data_dir.join("device.key"))?;
         let self_id = secret.public();
@@ -235,6 +252,7 @@ impl AppState {
             tasks,
             files,
             arrivals,
+            push,
             devices,
             startup_warnings,
             notices: Mutex::new(Vec::new()),
@@ -245,6 +263,7 @@ impl AppState {
             reminders_wanted: Notify::new(),
             downloads_wanted: Notify::new(),
             arrivals_wanted: Notify::new(),
+            push_wanted: Notify::new(),
             widget_wanted: Notify::new(),
             blob_guard: tokio::sync::Mutex::new(()),
             app: OnceLock::new(),
@@ -301,6 +320,9 @@ impl AppState {
             ARRIVALS_DOC => self.arrivals.change("de synchroniser les arrivées", |d| {
                 d.receive_sync_message(state, message)
             }),
+            PUSH_DOC => self.push.change("de synchroniser le réveil", |d| {
+                d.receive_sync_message(state, message)
+            }),
             DEVICES_DOC => self.devices.change("de synchroniser les appareils", |d| {
                 d.receive_sync_message(state, message)
             }),
@@ -314,6 +336,7 @@ impl AppState {
             TASKS_DOC => Ok(f(&mut *self.tasks.lock())),
             FILES_DOC => Ok(f(&mut *self.files.lock())),
             ARRIVALS_DOC => Ok(f(&mut *self.arrivals.lock())),
+            PUSH_DOC => Ok(f(&mut *self.push.lock())),
             DEVICES_DOC => Ok(f(&mut *self.devices.lock())),
             _ => Err(format!("document inconnu : {doc}")),
         }
@@ -329,6 +352,7 @@ impl Store for AppState {
             TASKS_DOC.into(),
             FILES_DOC.into(),
             ARRIVALS_DOC.into(),
+            PUSH_DOC.into(),
         ]
     }
 
@@ -402,6 +426,9 @@ impl Store for AppState {
             self.reminders_wanted.notify_one();
             self.widget_wanted.notify_one();
         }
+        if docs.iter().any(|d| d == PUSH_DOC || d == DEVICES_DOC) {
+            self.push_wanted.notify_one();
+        }
         if docs.iter().any(|d| d == ARRIVALS_DOC) {
             self.arrivals_wanted.notify_one();
             self.widget_wanted.notify_one();
@@ -418,7 +445,7 @@ impl Store for AppState {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// Dossier temporaire propre à chaque test.

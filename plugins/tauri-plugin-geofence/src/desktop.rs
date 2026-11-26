@@ -1,5 +1,6 @@
 //! Sur PC (et sur iOS, pas encore pris en charge), pas de géofencing :
-//! chaque appel renvoie une erreur explicite.
+//! chaque appel renvoie une erreur explicite, sauf la lecture des arrivées
+//! et le réveil par ntfy, sans effet.
 
 use std::marker::PhantomData;
 
@@ -37,11 +38,50 @@ impl<R: Runtime> Geofence<R> {
     }
 
     /// Aucune arrivée n'est jamais enregistrée sur PC.
-    pub fn peek_arrivals(&self) -> Result<Vec<i64>> {
+    pub fn peek_arrivals(&self) -> Result<Vec<PendingArrival>> {
         Ok(Vec::new())
     }
 
-    pub fn ack_arrivals(&self, _up_to: i64) -> Result<()> {
+    pub fn ack_arrivals(&self, _ids: Vec<String>) -> Result<()> {
+        Ok(())
+    }
+
+    /// Sans effet sur PC : pas de réveil par ntfy (l'appli tourne en tâche de fond).
+    pub fn set_push_config(&self, _config: PushConfig) -> Result<()> {
+        Ok(())
+    }
+
+    /// Pas de distributeur UnifiedPush sur PC.
+    pub fn register_push(&self) -> Result<PushStatus> {
+        Ok(PushStatus {
+            available: false,
+            endpoint: None,
+        })
+    }
+
+    pub fn on_push_endpoint<F: Fn(String) + Send + Sync + 'static>(
+        &self,
+        _handler: F,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn peek_received(&self) -> Result<Vec<ReceivedArrival>> {
+        Ok(Vec::new())
+    }
+
+    pub fn ack_received(&self, _ids: Vec<String>) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn on_received<F: Fn(ReceivedArrival) + Send + Sync + 'static>(
+        &self,
+        _handler: F,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn mark_rung(&self, _ids: Vec<String>) -> Result<()> {
         Ok(())
     }
 
