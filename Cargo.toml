@@ -1,6 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["crates/couple-core", "crates/couple-sync", "apps/desktop/src-tauri"]
+members = [
+  "crates/couple-core",
+  "crates/couple-sync",
+  "apps/desktop/src-tauri",
+  "plugins/tauri-plugin-geofence",
+]
 
 [workspace.package]
 edition = "2021"

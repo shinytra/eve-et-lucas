@@ -120,7 +120,9 @@ pub fn run() {
 
     #[cfg(mobile)]
     {
-        builder = builder.plugin(tauri_plugin_barcode_scanner::init());
+        builder = builder
+            .plugin(tauri_plugin_barcode_scanner::init())
+            .plugin(tauri_plugin_geofence::init());
     }
 
     // Uniquement avec `--features mcp-bridge` (jamais dans une version
