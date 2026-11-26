@@ -16,6 +16,8 @@ struct MemStore {
     notes: Mutex<NotesDoc>,
     devices: Mutex<DevicesDoc>,
     changes: Mutex<usize>,
+    wanted: Mutex<Vec<String>>,
+    received: Mutex<Vec<String>>,
 }
 
 impl MemStore {
@@ -26,6 +28,8 @@ impl MemStore {
             notes: Mutex::new(NotesDoc::new()),
             devices: Mutex::new(DevicesDoc::new()),
             changes: Mutex::new(0),
+            wanted: Mutex::new(Vec::new()),
+            received: Mutex::new(Vec::new()),
         })
     }
     fn titles(&self) -> Vec<String> {
@@ -92,6 +96,12 @@ impl Store for MemStore {
     }
     fn changed(&self, _docs: &[String]) {
         *self.changes.lock().unwrap() += 1;
+    }
+    fn wanted_blobs(&self) -> Vec<String> {
+        self.wanted.lock().unwrap().clone()
+    }
+    fn blobs_received(&self, hashes: &[String]) {
+        self.received.lock().unwrap().extend_from_slice(hashes);
     }
 }
 
@@ -248,4 +258,73 @@ async fn pairing_code_is_single_use_and_checked() {
     pc.shutdown().await;
     lucas.shutdown().await;
     intrus.shutdown().await;
+}
+
+#[tokio::test]
+async fn wanted_files_are_downloaded_after_sync() {
+    let (pc_store, pc) = node("PC").await;
+    let (lucas_store, lucas) = node("Lucas").await;
+    let code = pc.start_pairing(TTL).unwrap().encode();
+    lucas.join(&code).await.unwrap().first_sync.unwrap();
+
+    let content = b"photo de vacances".repeat(10_000);
+    let hash = pc.add_blob(content.clone()).await.unwrap();
+    assert_eq!(hash.len(), 64);
+    assert!(pc.has_blob(&hash).await);
+    assert!(!lucas.has_blob(&hash).await);
+
+    // Sans demande, rien n'est téléchargé.
+    let report = lucas.sync_with(pc.id()).await.unwrap();
+    assert!(report.downloaded.is_empty());
+
+    lucas_store.wanted.lock().unwrap().push(hash.clone());
+    let report = lucas.sync_with(pc.id()).await.unwrap();
+    assert_eq!(report.downloaded, vec![hash.clone()]);
+    assert_eq!(*lucas_store.received.lock().unwrap(), vec![hash.clone()]);
+    assert_eq!(lucas.read_blob(&hash).await.unwrap(), content);
+    // Déjà là : pas de nouveau téléchargement.
+    assert!(lucas
+        .sync_with(pc.id())
+        .await
+        .unwrap()
+        .downloaded
+        .is_empty());
+    drop(pc_store);
+}
+
+#[tokio::test]
+async fn files_can_be_fetched_on_demand_and_exported() {
+    let (_pc_store, pc) = node("PC").await;
+    let (_eve_store, eve) = node("Eve").await;
+    let code = pc.start_pairing(TTL).unwrap().encode();
+    eve.join(&code).await.unwrap().first_sync.unwrap();
+
+    let hash = pc.add_blob(b"liste de courses".to_vec()).await.unwrap();
+    eve.fetch_blob(&hash).await.unwrap();
+    let dir = std::env::temp_dir().join(format!("couple-sync-export-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let target = dir.join("courses.txt");
+    eve.export_blob(&hash, &target).await.unwrap();
+    assert_eq!(std::fs::read(&target).unwrap(), b"liste de courses");
+    std::fs::remove_dir_all(dir).unwrap();
+
+    assert!(eve.fetch_blob(&"0".repeat(64)).await.is_err());
+    assert!(eve.fetch_blob("pas une empreinte").await.is_err());
+}
+
+#[tokio::test]
+async fn unpaired_device_cannot_fetch_files() {
+    let (_pc_store, pc) = node("PC").await;
+    let (stranger_store, stranger) = node("Inconnu").await;
+    let hash = pc.add_blob(b"secret".to_vec()).await.unwrap();
+    // L'inconnu connaît le PC, mais le PC ne le connaît pas.
+    stranger.add_addr(pc.addr());
+    stranger_store
+        .devices
+        .lock()
+        .unwrap()
+        .upsert(&pc.id().to_string(), "PC", 1)
+        .unwrap();
+    assert!(stranger.fetch_blob(&hash).await.is_err());
+    assert!(!stranger.has_blob(&hash).await);
 }
