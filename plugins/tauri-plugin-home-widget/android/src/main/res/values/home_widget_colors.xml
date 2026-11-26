@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Thème clair : fond blanc légèrement transparent. -->
+    <color name="home_widget_background">#E6FFFFFF</color>
+    <color name="home_widget_text_primary">#DE000000</color>
+    <color name="home_widget_text_secondary">#99000000</color>
+    <color name="home_widget_accent">#FFC2185B</color>
+    <color name="home_widget_late">#FFC62828</color>
+</resources>

@@ -1,0 +1,29 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Le widget lui-même : Android (le lanceur) lui demande de se dessiner. -->
+        <receiver
+            android:name="fr.eveetlucas.homewidget.HomeWidgetProvider"
+            android:exported="true"
+            android:label="@string/home_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/home_widget_info" />
+        </receiver>
+
+        <!-- Cases cochées sur le widget. Non exporté : seule l'appli (via le
+             PendingIntent du widget) peut y envoyer une action. -->
+        <receiver
+            android:name="fr.eveetlucas.homewidget.WidgetActionReceiver"
+            android:exported="false" />
+
+        <!-- Fournit les lignes de la liste des tâches au lanceur. -->
+        <service
+            android:name="fr.eveetlucas.homewidget.HomeWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+    </application>
+</manifest>

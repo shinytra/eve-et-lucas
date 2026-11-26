@@ -210,6 +210,8 @@ pub struct AppState {
     pub arrivals_wanted: Notify,
     /// Réveille la boucle des téléchargements de fichiers.
     pub downloads_wanted: Notify,
+    /// Réveille la mise à jour du widget (téléphone).
+    pub widget_wanted: Notify,
     /// Empêche le ménage des contenus pendant qu'un fichier est partagé
     /// (entre le rangement du contenu et son ajout à la liste).
     pub blob_guard: tokio::sync::Mutex<()>,
@@ -243,6 +245,7 @@ impl AppState {
             reminders_wanted: Notify::new(),
             downloads_wanted: Notify::new(),
             arrivals_wanted: Notify::new(),
+            widget_wanted: Notify::new(),
             blob_guard: tokio::sync::Mutex::new(()),
             app: OnceLock::new(),
         };
@@ -397,9 +400,11 @@ impl Store for AppState {
     fn changed(&self, docs: &[String]) {
         if docs.iter().any(|d| d == TASKS_DOC) {
             self.reminders_wanted.notify_one();
+            self.widget_wanted.notify_one();
         }
         if docs.iter().any(|d| d == ARRIVALS_DOC) {
             self.arrivals_wanted.notify_one();
+            self.widget_wanted.notify_one();
         }
         if docs.iter().any(|d| d == FILES_DOC) {
             self.downloads_wanted.notify_one();
