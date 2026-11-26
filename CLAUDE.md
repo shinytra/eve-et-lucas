@@ -6,8 +6,12 @@ Appli de couple pour Eve et Lucas, en Rust, pour Android et PC. Lucas valide cha
 
 - **Tauri 2** : un seul code pour PC (Windows/Linux) et Android. Interface web dans `apps/desktop/ui/` (HTML/CSS/JS sans étape de build pour l'instant), cœur en Rust.
 - **`crates/couple-core`** : toutes les données et règles métier. Ne dépend ni de Tauri ni du réseau. Chaque fonctionnalité a son propre document **Automerge** (notes, tâches, widgets…), dont la racine est une table `id -> élément` avec des identifiants UUID v4. Ainsi deux appareils qui n'ont jamais communiqué peuvent fusionner sans rien perdre (voir `notes.rs`).
-- **`apps/desktop/src-tauri`** : plomberie uniquement. Ce qui est propre au PC (icône, lancement au démarrage, instance unique) est dans `src/desktop.rs`, compilé seulement avec `#[cfg(desktop)]` ; les plugins correspondants sont des dépendances réservées au PC dans `Cargo.toml`. Commandes Tauri qui appellent le cœur, enregistrement des documents dans le dossier de données de l'appli (écriture atomique : fichier temporaire puis renommage).
-- **Synchro (à venir)** : iroh 1.0 entre les trois pairs (téléphone de Lucas, téléphone d'Eve, PC). Le PC, allumé environ 95 % du temps, est le pair « boîte aux lettres » qui garde une copie de tout et héberge ntfy pour réveiller les téléphones. PC éteint : les téléphones se synchronisent directement entre eux.
+- **`apps/desktop/src-tauri`** : plomberie uniquement (`store.rs` : documents sur disque et trait `Store` ; `sync.rs` : nœud iroh en tâche de fond, commandes d'appairage). Ce qui est propre au PC (icône, lancement au démarrage, instance unique) est dans `src/desktop.rs`, compilé seulement avec `#[cfg(desktop)]` ; les plugins correspondants sont des dépendances réservées au PC dans `Cargo.toml`. Commandes Tauri qui appellent le cœur, enregistrement des documents dans le dossier de données de l'appli (écriture atomique : fichier temporaire puis renommage).
+- **`crates/couple-sync`** : synchro P2P avec iroh entre les trois pairs (téléphone de Lucas, téléphone d'Eve, PC). Le PC, allumé environ 95 % du temps, est le pair « boîte aux lettres » qui garde une copie de tout. PC éteint : les téléphones se synchronisent directement entre eux.
+  - Identité d'un appareil = sa clé iroh (`device.key` dans le dossier de données). La liste des appareils autorisés est elle-même un document Automerge synchronisé (`DevicesDoc`) : un appareil appairé avec le PC est appris par les autres.
+  - Appairage (ALPN `eve-et-lucas/pair/1`) : code `EL1:…` (QR code) à usage unique, valable 10 min, contenant l'adresse de l'hôte et un secret. Synchro (ALPN `eve-et-lucas/sync/1`) : refusée à tout appareil absent de `DevicesDoc`, un flux par document, protocole de synchro d'Automerge.
+  - L'appli fournit le stockage via le trait `Store`. Pour un nouveau document partagé : l'ajouter à `doc_names()` et à `generate`/`receive` dans `apps/desktop/src-tauri/src/store.rs`.
+  - Réseau `Online` (relais et annuaire DNS publics de n0, chiffré de bout en bout, rien n'est stocké) dans l'appli ; `Local` (connexions directes) dans les tests.
 - **Kotlin (à venir)** : uniquement ce que Rust ne peut pas faire sur Android (géofencing en arrière-plan, widgets Glance, service au premier plan), sous forme de plugins Tauri maison dans `plugins/`. Jamais de code à la main dans `gen/android` (régénéré).
 
 ## Commandes
@@ -20,6 +24,8 @@ cargo run -p eve-et-lucas-desktop       # lance l'appli PC
 cargo run -p eve-et-lucas-desktop --features mcp-bridge   # idem, pilotable par le serveur MCP Tauri
 cargo tauri dev --features mcp-bridge   # idem, avec la CLI Tauri (cargo install tauri-cli --version "^2")
 cd apps/desktop/e2e && npm install && npm test   # test de bout en bout via le MCP Tauri (appli lancée avec --features mcp-bridge)
+cargo build -p couple-sync --example peer && (cd apps/desktop/e2e && node pairing.mjs)   # appairage + synchro avec un faux téléphone
+EVE_ET_LUCAS_DATA_DIR=/tmp/essai cargo run -p eve-et-lucas-desktop   # appli avec un autre dossier de données
 cargo tauri android init                # plus tard : génère le projet Android
 cargo tauri android dev
 ```
@@ -64,7 +70,7 @@ Plutôt que de réécrire, s'inspirer de (ou dépendre de) :
 
 1. ✅ Base Tauri 2 + notes partagées en local.
 2. a. ✅ Appli PC en tâche de fond : icône dans la barre des tâches, fermer la fenêtre la cache, lancement au démarrage (option du menu de l'icône, démarre fenêtre cachée), une seule instance.
-   b. Synchro iroh entre appareils + appairage par QR code.
+   b. ✅ Synchro iroh entre appareils + appairage par QR code (écran « Appareils »).
 3. Appli Android avec la même base.
 4. Tâches communes et rappels (notifications).
 5. Partage de fichiers P2P (iroh-blobs).

@@ -1,0 +1,21 @@
+[package]
+name = "couple-sync"
+version = "0.1.0"
+description = "Synchro P2P (iroh) des documents du couple entre appareils appairés."
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+couple-core.workspace = true
+iroh = "1.5"
+tokio = { version = "1", features = ["sync", "time", "macros", "rt"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+data-encoding = "2"
+getrandom = "0.3"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+iroh = "1.5"
