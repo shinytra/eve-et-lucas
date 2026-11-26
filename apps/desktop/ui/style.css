@@ -1015,6 +1015,95 @@ input[type="color"] {
   color: var(--danger);
 }
 
+/* Dates importantes */
+.date-next {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--field-bg);
+  text-align: center;
+}
+
+.date-next .compte {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.date-next .title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.date-next .meta,
+.date .meta,
+#dates-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+#dates {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.date {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--field-bg);
+}
+
+.date .emoji {
+  font-size: 1.4rem;
+}
+
+.date .text {
+  flex: 1 1 160px;
+  display: grid;
+  min-width: 0;
+}
+
+.date .title {
+  overflow-wrap: anywhere;
+}
+
+.date .jours {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.date.today .jours {
+  color: var(--accent);
+}
+
+.date.passee {
+  opacity: 0.6;
+}
+
+.date .actions {
+  margin-left: auto;
+}
+
+#date-error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.check[hidden],
+.date-next[hidden] {
+  display: none;
+}
+
 /* ---------- Animés ---------- */
 
 #anime-search {

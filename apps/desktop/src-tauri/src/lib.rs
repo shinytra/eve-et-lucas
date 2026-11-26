@@ -3,8 +3,9 @@
 //! Ce crate ne contient que de la « plomberie » : il expose les fonctions du
 //! cœur (`couple-core`) à l'interface web via des commandes Tauri, enregistre
 //! les documents sur le disque (`store.rs`), les synchronise avec les autres
-//! appareils (`sync.rs`), affiche les rappels des tâches (`reminders.rs`) et
-//! garde les affiches des animés (`animes.rs`).
+//! appareils (`sync.rs`), affiche les rappels des tâches (`reminders.rs`)
+//! et des dates importantes (`dates.rs`), et garde les affiches des animés
+//! (`animes.rs`).
 //! Aucune règle métier ici.
 
 use std::{
@@ -18,6 +19,7 @@ use tauri::{Manager, State};
 mod animes;
 mod appearance;
 mod arrivals;
+mod dates;
 #[cfg(desktop)]
 mod desktop;
 mod files;
@@ -161,6 +163,7 @@ pub fn run() {
             app.manage(appearance::AppearanceState::load(&data_dir));
             sync::start(app.handle(), state.clone());
             reminders::start(app.handle(), state.clone());
+            dates::start(app.handle(), state.clone());
             arrivals::start(app.handle(), state.clone());
             widget::start(app.handle(), state.clone());
             animes::start(app.handle(), state.clone());
@@ -189,6 +192,10 @@ pub fn run() {
             animes::delete_anime,
             animes::anime_statuses,
             animes::anime_cover,
+            dates::list_dates,
+            dates::add_date,
+            dates::update_date,
+            dates::delete_date,
             arrivals::list_arrivals,
             arrivals::arrival_person,
             arrivals::set_arrival_person,

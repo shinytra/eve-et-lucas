@@ -31,6 +31,9 @@ tauri-plugin-notification = "2.8"
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 webpki-roots = "1"
+# Date et heure locales avec le fuseau de l'appareil (rappels des dates
+# importantes), Android compris. Remplaçant conseillé de chrono (plus maintenu).
+jiff = "1"
 # Arrivée à la maison (géofencing Android) ; sur PC, chaque appel renvoie une erreur.
 tauri-plugin-geofence = { path = "../../../plugins/tauri-plugin-geofence" }
 # Widget d'écran d'accueil (Android) ; sur PC, chaque appel est sans effet.

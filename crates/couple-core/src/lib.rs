@@ -8,6 +8,7 @@ pub mod anilist;
 pub mod animes;
 pub mod appearance;
 pub mod arrivals;
+pub mod dates;
 pub mod devices;
 pub mod files;
 pub mod notes;
@@ -19,6 +20,7 @@ pub mod widget;
 pub use animes::{Anime, AnimeInfo, AnimesDoc};
 pub use appearance::{Appearance, AppearanceSettings};
 pub use arrivals::{Arrival, ArrivalsDoc};
+pub use dates::{DateInput, DateReminder, DatesDoc, Day, ImportantDate, UpcomingDate};
 pub use devices::{Device, DevicesDoc};
 pub use files::{FilesDoc, SharedFile};
 pub use notes::{Note, NotesDoc};
@@ -64,6 +66,10 @@ pub enum Error {
     FileTooLarge(u64),
     #[error("fichier invalide : {0}")]
     InvalidFile(String),
+    #[error("la date {0} n'existe pas")]
+    DateNotFound(String),
+    #[error("date invalide : {0}")]
+    InvalidDate(String),
     #[error("il manque le prénom")]
     MissingAuthor,
     #[error("appareil invalide : {0}")]

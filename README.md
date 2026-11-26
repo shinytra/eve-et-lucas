@@ -30,15 +30,23 @@ cargo run -p eve-et-lucas-desktop
 
 Les notes sont enregistrées dans le dossier de données de l'appli (`%APPDATA%\fr.eveetlucas.couple` sous Windows, `~/.local/share/fr.eveetlucas.couple` sous Linux).
 
-## Installer l'appli sur Android
+## Installer l'appli
 
-Chaque modification de `main` fabrique un APK de test sur GitHub :
+Les fichiers à installer sont sur la page **[Releases](https://github.com/shinytra/eve-et-lucas/releases/latest)** du dépôt :
 
-1. Onglet **Actions** du dépôt, workflow **Android**, dernière exécution réussie.
-2. En bas de la page, télécharger **eve-et-lucas-android-debug** (fichier zip contenant l'APK).
-3. Sur le téléphone, ouvrir l'APK et autoriser l'installation depuis cette source.
+- **PC Windows** : `Eve-et-Lucas-…-Windows.exe`. Windows affiche « Windows a protégé votre ordinateur » (SmartScreen) car l'appli n'est pas signée par un éditeur payant : **Informations complémentaires**, puis **Exécuter quand même**.
+- **Android** : `Eve-et-Lucas-…-Android.apk`, à ouvrir sur le téléphone en autorisant l'installation depuis cette source. Installer aussi l'appli **ntfy** (Play Store ou F-Droid). C'est une version de test (clé de développement, téléphones ARM 64 bits, soit presque tous les téléphones récents).
 
-L'APK est une version de test (signée avec une clé de développement, pour téléphones ARM 64 bits, soit presque tous les téléphones récents). Pour appairer le téléphone, ouvrir « Appareils » sur le PC, puis « Scanner le QR code » sur le téléphone.
+Pour appairer le téléphone, ouvrir « Appareils » sur le PC, puis « Scanner le QR code » sur le téléphone.
+
+### Publier une nouvelle version
+
+1. Monter `version` dans `apps/desktop/src-tauri/tauri.conf.json` (et `Cargo.toml` de l'appli).
+2. Onglet **Actions**, workflow **Version à télécharger**, **Run workflow** (ou pousser une étiquette `vX.Y.Z`). Il construit l'installateur Windows et l'APK, puis crée la Release `vX.Y.Z`.
+
+Pour que le téléphone accepte une mise à jour sans désinstaller l'appli, l'APK doit être signé avec la même clé à chaque version : créer une fois une clé (`keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"`) et la mettre en base64 dans le secret `ANDROID_DEBUG_KEYSTORE` du dépôt (Settings, Secrets and variables, Actions). Sans ce secret, chaque version a une clé différente.
+
+Chaque modification de `main` fabrique aussi un APK de test dans l'onglet **Actions** (workflow **Android**, fichier **eve-et-lucas-android-debug**, gardé 14 jours).
 
 ## Développer avec Claude Code
 

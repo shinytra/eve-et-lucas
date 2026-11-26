@@ -98,6 +98,56 @@
         <ul id="animes"></ul>
       </section>
 
+      <section aria-labelledby="dates-title" class="dates verre">
+        <h2 id="dates-title">Dates importantes</h2>
+        <div id="date-next" class="date-next" hidden></div>
+        <form id="date-form" autocomplete="off" novalidate>
+          <input id="date-title" placeholder="Nom (ex. : Notre anniversaire)" maxlength="100" aria-label="Nom de la date" />
+          <div class="fields">
+            <label>
+              Type
+              <select id="date-kind">
+                <option value="couple">💞 Anniversaire de couple</option>
+                <option value="anniversaire">🎂 Anniversaire</option>
+                <option value="fete">🎉 Fête</option>
+                <option value="autre">📅 Autre</option>
+              </select>
+            </label>
+            <label>
+              Date
+              <input id="date-day" type="date" />
+            </label>
+            <label>
+              Rappel
+              <select id="date-remind">
+                <option value="0">Le jour même</option>
+                <option value="1">1 jour avant</option>
+                <option value="3">3 jours avant</option>
+                <option value="7" selected>1 semaine avant</option>
+                <option value="14">2 semaines avant</option>
+                <option value="30">1 mois avant</option>
+              </select>
+            </label>
+          </div>
+          <label class="check">
+            <input id="date-yearly" type="checkbox" checked />
+            Revient chaque année
+          </label>
+          <label class="check" id="date-count-label">
+            <input id="date-count" type="checkbox" checked />
+            Compter les années depuis cette date
+          </label>
+          <div class="actions">
+            <button type="button" id="date-cancel" hidden>Annuler</button>
+            <button type="submit" id="date-save">Ajouter</button>
+          </div>
+          <p id="date-error" role="alert" hidden></p>
+        </form>
+        <p class="meta">Les rappels s'affichent à 9 h sur chaque appareil, et le jour même.</p>
+        <p id="dates-empty" class="meta" hidden>Aucune date pour l'instant.</p>
+        <ul id="dates"></ul>
+      </section>
+
       <section aria-labelledby="notes-title" class="notes verre">
         <h2 id="notes-title">Notes partagées</h2>
         <form id="note-form" autocomplete="off" novalidate>
@@ -250,6 +300,7 @@
     <script src="main.js"></script>
     <script src="tasks.js"></script>
     <script src="animes.js"></script>
+    <script src="dates.js"></script>
     <script src="files.js"></script>
     <script src="arrivals.js"></script>
     <script src="devices.js"></script>
