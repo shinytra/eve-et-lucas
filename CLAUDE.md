@@ -7,6 +7,7 @@ Appli de couple pour Eve et Lucas, en Rust, pour Android et PC. Lucas valide cha
 - **Tauri 2** : un seul code pour PC (Windows/Linux) et Android. Interface web dans `apps/desktop/ui/` (HTML/CSS/JS sans étape de build pour l'instant), cœur en Rust.
 - **`crates/couple-core`** : toutes les données et règles métier. Ne dépend ni de Tauri ni du réseau. Chaque fonctionnalité a son propre document **Automerge** (notes, tâches, widgets…), dont la racine est une table `id -> élément` avec des identifiants UUID v4. Ainsi deux appareils qui n'ont jamais communiqué peuvent fusionner sans rien perdre (voir `notes.rs`).
 - **`apps/desktop/src-tauri`** : plomberie uniquement (`store.rs` : documents sur disque et trait `Store` ; `sync.rs` : nœud iroh en tâche de fond, commandes d'appairage ; `reminders.rs` : notifications des tâches échues via `tauri-plugin-notification` : « en cours » sur téléphone (de retour 15 min après si balayées) et confiées à Android à l'avance, répétées toutes les heures sur PC). Ce qui est propre au PC (icône, lancement au démarrage, instance unique) est dans `src/desktop.rs`, compilé seulement avec `#[cfg(desktop)]` ; les plugins correspondants sont des dépendances réservées au PC dans `Cargo.toml`. Commandes Tauri qui appellent le cœur, enregistrement des documents dans le dossier de données de l'appli (écriture atomique : fichier temporaire puis renommage).
+- **Dates importantes** : document `dates` (`couple_core::dates`). Le jour, le mois, l'année et la répétition sont une seule valeur Automerge (`when` = `annuel:2021-06-12`, `annuel:02-29`, `unique:2027-09-05`) pour qu'une fusion ne crée jamais une date impossible ; le 29 février est fêté le 28 les autres années. Le cœur travaille en jours (`Day`, sans fuseau) ; `src/dates.rs` donne la date locale (crate `jiff`, fuseau de l'appareil, Android compris) et affiche les rappels à 9 h, une seule fois par appareil (`rappels-dates.json`), confiés à Android 60 jours à l'avance sur téléphone.
 - **Apparence** : thème « verre dépoli » propre à chaque appareil (pas d'Automerge) : `couple_core::appearance` (8 préréglages, bornes, nettoyage des valeurs, codes de thème `EVELUCAS-THEME:`), fichiers `apparence.json` et `fond-ecran.txt` (`src/appearance.rs`), variables CSS posées par `ui/appearance.js`. Chaque écran est un `section.verre` ; ses éléments sont des cartes en `var(--field-bg)` (pas de verre dans le verre).
 - **`crates/couple-sync`** : synchro P2P avec iroh entre les trois pairs (téléphone de Lucas, téléphone d'Eve, PC). Le PC, allumé environ 95 % du temps, est le pair « boîte aux lettres » qui garde une copie de tout. PC éteint : les téléphones se synchronisent directement entre eux.
   - Identité d'un appareil = sa clé iroh (`device.key` dans le dossier de données). La liste des appareils autorisés est elle-même un document Automerge synchronisé (`DevicesDoc`) : un appareil appairé avec le PC est appris par les autres.
@@ -28,7 +29,7 @@ cargo test --workspace                  # tests du cœur
 cargo run -p eve-et-lucas-desktop       # lance l'appli PC
 cargo run -p eve-et-lucas-desktop --features mcp-bridge   # idem, pilotable par le serveur MCP Tauri
 cargo tauri dev --features mcp-bridge   # idem, avec la CLI Tauri (cargo install tauri-cli --version "^2")
-cd apps/desktop/e2e && npm install && npm test   # notes + tâches + fichiers de bout en bout via le MCP Tauri (appli lancée avec --features mcp-bridge)
+cd apps/desktop/e2e && npm install && npm test   # notes + tâches + fichiers + dates de bout en bout via le MCP Tauri (appli lancée avec --features mcp-bridge)
 (cd apps/desktop/e2e && npm run test:apparence)   # préréglages, réglages, thèmes, image de fond + captures dans captures/
 cargo build -p couple-sync --example peer && (cd apps/desktop/e2e && node pairing.mjs)   # appairage + synchro avec un faux téléphone
 EVE_ET_LUCAS_DATA_DIR=/tmp/essai cargo run -p eve-et-lucas-desktop   # appli avec un autre dossier de données
@@ -87,3 +88,5 @@ Plutôt que de réécrire, s'inspirer de (ou dépendre de) :
 6. ✅ Sonnerie à l'arrivée (géofencing, plugin Kotlin ; reste à essayer sur vos téléphones).
 7. a. ✅ Widget d'écran d'accueil (tâches à cocher, dernière arrivée ; reste à essayer sur vos téléphones).
    b. ✅ Réveil des appareils par ntfy, chiffré (reste à essayer sur vos téléphones, avec l'appli ntfy).
+8. a. ✅ Dates importantes : anniversaire de couple, anniversaires, fêtes, compte à rebours et rappels.
+   b. Prochaine date sur le widget.
