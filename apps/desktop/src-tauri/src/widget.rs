@@ -1,7 +1,7 @@
 //! Widget d'écran d'accueil (téléphone seulement).
 //!
 //! L'appli envoie au widget un résumé tout prêt (`couple_core::widget`) à
-//! chaque changement des tâches ou des arrivées. Les tâches cochées sur le
+//! chaque changement des tâches, des arrivées ou des dates importantes. Les tâches cochées sur le
 //! widget sont notées par Android, même appli fermée, puis appliquées ici
 //! au nom de la personne qui porte le téléphone.
 
@@ -51,7 +51,7 @@ mod phone {
                 .await
                 .unwrap_or(None);
                 // Toutes les minutes au moins : une tâche passe « en retard »,
-                // une arrivée finit par disparaître.
+                // une arrivée finit par disparaître, minuit change la prochaine date.
                 tokio::select! {
                     () = state.widget_wanted.notified() => {}
                     () = tokio::time::sleep(Duration::from_secs(60)) => {}
@@ -66,7 +66,8 @@ mod phone {
         // Un verrou à la fois.
         let tasks = state.tasks.lock().list();
         let arrivals = state.arrivals.lock().list();
-        let mut data = snapshot(&tasks, &arrivals, now);
+        let dates = state.dates.lock().upcoming(crate::dates::local_today().0);
+        let mut data = snapshot(&tasks, &arrivals, &dates, now);
         let key = {
             data.updated_at = 0;
             serde_json::to_string(&data).ok()?

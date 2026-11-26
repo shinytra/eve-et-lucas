@@ -485,6 +485,7 @@ impl Store for AppState {
         }
         if docs.iter().any(|d| d == DATES_DOC) {
             self.dates_wanted.notify_one();
+            self.widget_wanted.notify_one();
         }
         if let Some(app) = self.app.get() {
             if let Err(e) = app.emit("docs-changed", docs) {

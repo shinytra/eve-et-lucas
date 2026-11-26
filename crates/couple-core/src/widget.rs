@@ -7,10 +7,13 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Arrival, Error, Result, Task, TasksDoc};
+use crate::{Arrival, Day, Error, Result, Task, TasksDoc, UpcomingDate};
 
 /// Nombre maximal de tâches affichées sur le widget.
 pub const MAX_TASKS: usize = 8;
+/// Nombre de dates à venir envoyées au widget : appli fermée, il passe
+/// lui-même à la suivante quand une date est passée.
+pub const MAX_DATES: usize = 5;
 /// Une arrivée reste affichée sur le widget pendant 12 heures.
 pub const ARRIVAL_SHOWN_MS: i64 = 12 * 60 * 60 * 1000;
 
@@ -35,6 +38,19 @@ pub struct WidgetArrival {
     pub at: i64,
 }
 
+/// Une date importante à venir. Le widget compte lui-même les jours restants
+/// à partir de `day` : le compte reste juste après minuit, appli fermée.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WidgetDate {
+    pub title: String,
+    pub emoji: String,
+    /// Jour de la prochaine occurrence.
+    pub day: Day,
+    /// Années fêtées ce jour-là (« 5 ans »).
+    pub years: Option<i32>,
+}
+
 /// Ce que le widget affiche.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,13 +60,22 @@ pub struct WidgetData {
     /// Nombre total de tâches à faire (pour « et 3 autres »).
     pub open_count: usize,
     pub last_arrival: Option<WidgetArrival>,
+    /// Prochaines dates importantes, la plus proche en premier (au plus
+    /// [`MAX_DATES`]). Le widget affiche la première qui n'est pas passée.
+    pub next_dates: Vec<WidgetDate>,
     /// Moment du calcul (millisecondes Unix).
     pub updated_at: i64,
 }
 
 /// Calcule le contenu du widget. `tasks` dans l'ordre de [`TasksDoc::list`],
-/// `arrivals` dans l'ordre de [`crate::ArrivalsDoc::list`].
-pub fn snapshot(tasks: &[Task], arrivals: &[Arrival], now_ms: i64) -> WidgetData {
+/// `arrivals` dans l'ordre de [`crate::ArrivalsDoc::list`], `dates` dans
+/// celui de [`crate::DatesDoc::upcoming`] (la plus proche en premier).
+pub fn snapshot(
+    tasks: &[Task],
+    arrivals: &[Arrival],
+    dates: &[UpcomingDate],
+    now_ms: i64,
+) -> WidgetData {
     let open: Vec<&Task> = tasks.iter().filter(|t| !t.done).collect();
     WidgetData {
         tasks: open
@@ -73,6 +98,18 @@ pub fn snapshot(tasks: &[Task], arrivals: &[Arrival], now_ms: i64) -> WidgetData
                 who: a.who.clone(),
                 at: a.at,
             }),
+        next_dates: dates
+            .iter()
+            .filter_map(|u| {
+                Some(WidgetDate {
+                    title: u.date.title.clone(),
+                    emoji: u.date.emoji().to_owned(),
+                    day: u.next?,
+                    years: u.years,
+                })
+            })
+            .take(MAX_DATES)
+            .collect(),
         updated_at: now_ms,
     }
 }
@@ -110,7 +147,8 @@ pub fn apply_action(doc: &mut TasksDoc, action: &WidgetAction, who: &str) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ArrivalsDoc;
+    use crate::dates::{KIND_BIRTHDAY, KIND_COUPLE, KIND_OTHER};
+    use crate::{ArrivalsDoc, DateInput, DatesDoc};
 
     const MIN: i64 = 60 * 1000;
 
@@ -133,7 +171,7 @@ mod tests {
         arrivals.add("Eve", "tel-eve", now - 13 * 60 * MIN).unwrap();
         arrivals.add("Lucas", "tel-lucas", now - 30 * MIN).unwrap();
 
-        let data = snapshot(&tasks.list(), &arrivals.list(), now);
+        let data = snapshot(&tasks.list(), &arrivals.list(), &[], now);
         assert_eq!(data.open_count, 12);
         assert_eq!(data.tasks.len(), MAX_TASKS);
         assert_eq!(data.tasks[0].id, late.id);
@@ -150,8 +188,124 @@ mod tests {
         );
 
         // Arrivée trop ancienne : plus affichée.
-        let data = snapshot(&[], &arrivals.list(), now + 13 * 60 * MIN);
+        let data = snapshot(&[], &arrivals.list(), &[], now + 13 * 60 * MIN);
         assert_eq!(data.last_arrival, None);
+        assert!(data.next_dates.is_empty());
+    }
+
+    fn date_input(
+        title: &str,
+        kind: &str,
+        month: u32,
+        day: u32,
+        year: i32,
+        yearly: bool,
+    ) -> DateInput {
+        DateInput {
+            title: title.into(),
+            kind: kind.into(),
+            month,
+            day,
+            year: Some(year),
+            yearly,
+            remind_days: 0,
+        }
+    }
+
+    #[test]
+    fn snapshot_lists_next_important_dates() {
+        let mut dates = DatesDoc::new();
+        dates
+            .add(
+                "Eve",
+                &date_input("Vacances", KIND_OTHER, 3, 1, 2026, false),
+                0,
+            )
+            .unwrap();
+        dates
+            .add(
+                "Lucas",
+                &date_input("Nous", KIND_COUPLE, 6, 12, 2021, true),
+                0,
+            )
+            .unwrap();
+        dates
+            .add(
+                "Eve",
+                &date_input("Mariage", KIND_OTHER, 9, 5, 2027, false),
+                0,
+            )
+            .unwrap();
+        for i in 0..6 {
+            dates
+                .add(
+                    "Eve",
+                    &date_input(&format!("d{i}"), KIND_OTHER, 12, 1, 2030, false),
+                    0,
+                )
+                .unwrap();
+        }
+        let today = Day::new(2026, 11, 26).unwrap();
+        let data = snapshot(&[], &[], &dates.upcoming(today), 0);
+        // La date unique passée (vacances) n'est jamais envoyée.
+        assert_eq!(data.next_dates.len(), MAX_DATES);
+        assert_eq!(
+            data.next_dates[0],
+            WidgetDate {
+                title: "Nous".into(),
+                emoji: "💞".into(),
+                day: Day::new(2027, 6, 12).unwrap(),
+                years: Some(6),
+            }
+        );
+        assert_eq!(data.next_dates[1].title, "Mariage");
+        assert_eq!(data.next_dates[1].years, None);
+
+        // Le jour même, elle reste la première.
+        let today = Day::new(2027, 6, 12).unwrap();
+        let data = snapshot(&[], &[], &dates.upcoming(today), 0);
+        assert_eq!(data.next_dates[0].title, "Nous");
+
+        // Plus aucune date à venir.
+        let mut past = DatesDoc::new();
+        past.add(
+            "Eve",
+            &date_input("Vacances", KIND_OTHER, 3, 1, 2026, false),
+            0,
+        )
+        .unwrap();
+        let data = snapshot(&[], &[], &past.upcoming(today), 0);
+        assert!(data.next_dates.is_empty());
+    }
+
+    #[test]
+    fn next_dates_merge_from_other_device() {
+        // Le PC et le téléphone ajoutent chacun une date avant de se synchroniser.
+        let mut pc = DatesDoc::new();
+        let mut phone = pc.fork();
+        pc.add(
+            "Lucas",
+            &date_input("Eve", KIND_BIRTHDAY, 12, 3, 2000, true),
+            0,
+        )
+        .unwrap();
+        phone
+            .add(
+                "Eve",
+                &date_input("Lucas", KIND_BIRTHDAY, 1, 20, 1997, true),
+                0,
+            )
+            .unwrap();
+        phone.merge(&mut pc).unwrap();
+        pc.merge(&mut phone).unwrap();
+        let today = Day::new(2026, 11, 26).unwrap();
+        let data = snapshot(&[], &[], &phone.upcoming(today), 0);
+        assert_eq!(data, snapshot(&[], &[], &pc.upcoming(today), 0));
+        let next = &data.next_dates[0];
+        assert_eq!((next.title.as_str(), next.emoji.as_str()), ("Eve", "🎂"));
+        assert_eq!(next.day, Day::new(2026, 12, 3).unwrap());
+        assert_eq!(next.years, Some(26));
+        assert_eq!(data.next_dates[1].day, Day::new(2027, 1, 20).unwrap());
     }
 
     #[test]
@@ -204,6 +358,7 @@ mod tests {
     fn widget_data_uses_camel_case() {
         let json = serde_json::to_string(&WidgetData::default()).unwrap();
         assert!(json.contains("openCount") && json.contains("lastArrival"));
+        assert!(json.contains("nextDates"));
         let action: WidgetAction =
             serde_json::from_str(r#"{"id":"a","kind":"done","taskId":"t","at":1}"#).unwrap();
         assert_eq!(action.task_id, "t");

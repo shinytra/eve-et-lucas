@@ -25,6 +25,13 @@
         android:textColor="@color/home_widget_text_secondary"
         android:textSize="13sp" />
 
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/home_widget_preview_date"
+        android:textColor="@color/home_widget_text_primary"
+        android:textSize="13sp" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

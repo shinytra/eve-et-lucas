@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 4 × 2 cases par défaut, redimensionnable. Pas de mise à jour périodique :
-     c'est l'appli qui redessine le widget quand les données changent. -->
+     l'appli redessine le widget quand les données changent, et une alarme le
+     redessine à minuit (compte à rebours de la prochaine date). -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/home_widget_description"
     android:initialLayout="@layout/home_widget"
