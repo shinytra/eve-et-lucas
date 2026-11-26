@@ -1,0 +1,6 @@
+/target
+**/target
+node_modules/
+/apps/desktop/src-tauri/gen/
+.DS_Store
+*.automerge

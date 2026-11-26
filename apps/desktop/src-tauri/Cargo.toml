@@ -1,0 +1,24 @@
+[package]
+name = "eve-et-lucas-desktop"
+version = "0.1.0"
+description = "Appli PC Eve & Lucas (Tauri 2). Pensée dès le départ pour Android."
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+# Nom distinct du binaire (exigence Windows) ; staticlib/cdylib pour Android.
+name = "eve_et_lucas_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+couple-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2.12", features = [] }
+# Pont pour le serveur MCP Tauri (Claude Code voit et pilote l'appli).
+# Activé seulement dans les builds de debug, voir src/lib.rs.
+tauri-plugin-mcp-bridge = "0.13"
