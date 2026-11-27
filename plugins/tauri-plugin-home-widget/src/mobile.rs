@@ -36,6 +36,15 @@ impl<R: Runtime> HomeWidget<R> {
             .map_err(Into::into)
     }
 
+    /// Enregistre les images du widget photo (JSON préparé par l'appli :
+    /// chemins des images, intervalle des GIF) et redessine ces widgets.
+    pub fn update_photos(&self, data_json: String) -> Result<()> {
+        check_data_json(&data_json)?;
+        self.0
+            .run_mobile_plugin("updatePhotos", UpdateArgs { data: data_json })
+            .map_err(Into::into)
+    }
+
     /// Actions faites sur le widget et pas encore confirmées avec
     /// [`HomeWidget::ack_actions`].
     pub fn peek_actions(&self) -> Result<Vec<Action>> {

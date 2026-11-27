@@ -24,6 +24,11 @@ impl<R: Runtime> HomeWidget<R> {
         check_data_json(&data_json)
     }
 
+    /// Idem pour le widget photo.
+    pub fn update_photos(&self, data_json: String) -> Result<()> {
+        check_data_json(&data_json)
+    }
+
     /// Aucune action n'est jamais faite sur PC.
     pub fn peek_actions(&self) -> Result<Vec<Action>> {
         Ok(Vec::new())

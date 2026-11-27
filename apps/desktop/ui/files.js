@@ -17,6 +17,10 @@
 
   // Adresses blob: des aperçus, libérées à chaque nouvel affichage.
   let previews = [];
+  // Fichiers déjà sur le widget photo, et taille maximale d'une image (celle
+  // que les téléphones téléchargent d'office).
+  let onWidget = new Set();
+  const WIDGET_MAX = 10 * 1024 * 1024;
 
   function showError(message) {
     errorBox.textContent = message ?? "";
@@ -109,6 +113,14 @@
             }),
           );
         }
+        if (file.is_image && file.size <= WIDGET_MAX && !onWidget.has(file.id)) {
+          actions.append(
+            button("cadre", `Mettre « ${file.name} » sur le widget photo`, async () => {
+              await invoke("add_cadre", { author: $("author").value, fileId: file.id });
+              showStatus(`« ${file.name} » est sur le widget photo.`);
+            }),
+          );
+        }
         actions.append(
           button(
             "supprimer",
@@ -137,7 +149,9 @@
 
   async function refresh() {
     try {
-      render(await invoke("list_files"));
+      const [files, cadres] = await Promise.all([invoke("list_files"), invoke("list_cadres")]);
+      onWidget = new Set(cadres.map((c) => c.file_id));
+      render(files);
     } catch (e) {
       showError(String(e));
     }
@@ -202,6 +216,6 @@
 
   refresh();
   tauri.event?.listen("docs-changed", (event) => {
-    if (event.payload?.includes("files")) refresh();
+    if (event.payload?.includes("files") || event.payload?.includes("cadres")) refresh();
   });
 })();

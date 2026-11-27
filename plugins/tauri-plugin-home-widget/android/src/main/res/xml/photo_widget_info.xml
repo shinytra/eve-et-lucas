@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2 × 2 cases par défaut, redimensionnable de 1 × 1 à tout l'écran.
+     Pas de mise à jour périodique ni d'alarme : le widget n'est redessiné que
+     quand l'appli envoie de nouvelles images ou qu'on le touche. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/photo_widget_description"
+    android:initialLayout="@layout/photo_widget"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="40dp"
+    android:minResizeHeight="40dp"
+    android:previewImage="@drawable/photo_widget_preview_image"
+    android:previewLayout="@layout/photo_widget_preview"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

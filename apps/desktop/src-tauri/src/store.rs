@@ -8,8 +8,8 @@ use std::{
 };
 
 use couple_core::{
-    AnimesDoc, ArrivalsDoc, DatesDoc, DevicesDoc, FilesDoc, MusicDoc, NotesDoc, PushDoc, SyncState,
-    Syncable, TasksDoc,
+    AnimesDoc, ArrivalsDoc, CadresDoc, DatesDoc, DevicesDoc, FilesDoc, MusicDoc, NotesDoc, PushDoc,
+    SyncState, Syncable, TasksDoc,
 };
 use couple_sync::{
     iroh::{EndpointId, SecretKey},
@@ -95,6 +95,15 @@ impl Persist for MusicDoc {
     }
     fn save(&mut self) -> Vec<u8> {
         MusicDoc::save(self)
+    }
+}
+
+impl Persist for CadresDoc {
+    fn load(bytes: &[u8]) -> couple_core::Result<Self> {
+        CadresDoc::load(bytes)
+    }
+    fn save(&mut self) -> Vec<u8> {
+        CadresDoc::save(self)
     }
 }
 
@@ -225,6 +234,7 @@ pub const PUSH_DOC: &str = "push";
 pub const DEVICES_DOC: &str = "devices";
 pub const ANIMES_DOC: &str = "animes";
 pub const MUSIC_DOC: &str = "musiques";
+pub const CADRES_DOC: &str = "cadres";
 /// Sur téléphone : taille maximale d'une image téléchargée sans le demander.
 const AUTO_DOWNLOAD_MAX: u64 = 10 * 1024 * 1024;
 
@@ -241,6 +251,8 @@ pub struct AppState {
     pub animes: Persisted<AnimesDoc>,
     /// Musiques recommandées (liens YouTube Music).
     pub music: Persisted<MusicDoc>,
+    /// Images et GIF du widget photo (téléphone).
+    pub cadres: Persisted<CadresDoc>,
     pub devices: Persisted<DevicesDoc>,
     /// Messages à montrer au démarrage (fichier illisible, etc.).
     pub startup_warnings: Vec<String>,
@@ -271,6 +283,8 @@ pub struct AppState {
     pub music_wanted: Notify,
     /// Réveille la mise à jour du widget (téléphone).
     pub widget_wanted: Notify,
+    /// Réveille la préparation des images du widget photo (téléphone).
+    pub photos_wanted: Notify,
     /// Empêche le ménage des contenus pendant qu'un fichier est partagé
     /// (entre le rangement du contenu et son ajout à la liste).
     pub blob_guard: tokio::sync::Mutex<()>,
@@ -290,6 +304,7 @@ impl AppState {
         let push = Persisted::load(data_dir.join("push.automerge"), &mut startup_warnings)?;
         let animes = Persisted::load(data_dir.join("animes.automerge"), &mut startup_warnings)?;
         let music = Persisted::load(data_dir.join("musiques.automerge"), &mut startup_warnings)?;
+        let cadres = Persisted::load(data_dir.join("cadres.automerge"), &mut startup_warnings)?;
         let devices = Persisted::load(data_dir.join("devices.automerge"), &mut startup_warnings)?;
         let secret = load_or_create_key(&data_dir.join("device.key"))?;
         let self_id = secret.public();
@@ -302,6 +317,7 @@ impl AppState {
             push,
             animes,
             music,
+            cadres,
             devices,
             startup_warnings,
             notices: Mutex::new(Vec::new()),
@@ -315,6 +331,7 @@ impl AppState {
             arrivals_wanted: Notify::new(),
             push_wanted: Notify::new(),
             widget_wanted: Notify::new(),
+            photos_wanted: Notify::new(),
             animes_wanted: Notify::new(),
             music_wanted: Notify::new(),
             blob_guard: tokio::sync::Mutex::new(()),
@@ -384,6 +401,9 @@ impl AppState {
             MUSIC_DOC => self.music.change("de synchroniser les musiques", |d| {
                 d.receive_sync_message(state, message)
             }),
+            CADRES_DOC => self.cadres.change("de synchroniser le widget photo", |d| {
+                d.receive_sync_message(state, message)
+            }),
             DEVICES_DOC => self.devices.change("de synchroniser les appareils", |d| {
                 d.receive_sync_message(state, message)
             }),
@@ -401,6 +421,7 @@ impl AppState {
             PUSH_DOC => Ok(f(&mut *self.push.lock())),
             ANIMES_DOC => Ok(f(&mut *self.animes.lock())),
             MUSIC_DOC => Ok(f(&mut *self.music.lock())),
+            CADRES_DOC => Ok(f(&mut *self.cadres.lock())),
             DEVICES_DOC => Ok(f(&mut *self.devices.lock())),
             _ => Err(format!("document inconnu : {doc}")),
         }
@@ -420,6 +441,7 @@ impl Store for AppState {
             ANIMES_DOC.into(),
             DATES_DOC.into(),
             MUSIC_DOC.into(),
+            CADRES_DOC.into(),
         ]
     }
 
@@ -482,7 +504,9 @@ impl Store for AppState {
     }
 
     fn blobs_received(&self, _hashes: &[String]) {
-        // Seulement l'interface : pas besoin de relancer les téléchargements.
+        // Une image du widget photo vient peut-être d'arriver.
+        self.photos_wanted.notify_one();
+        // Sinon seulement l'interface : pas besoin de relancer les téléchargements.
         if let Some(app) = self.app.get() {
             let _ = app.emit("docs-changed", [FILES_DOC]);
         }
@@ -502,6 +526,10 @@ impl Store for AppState {
         }
         if docs.iter().any(|d| d == FILES_DOC) {
             self.downloads_wanted.notify_one();
+            self.photos_wanted.notify_one();
+        }
+        if docs.iter().any(|d| d == CADRES_DOC) {
+            self.photos_wanted.notify_one();
         }
         if docs.iter().any(|d| d == ANIMES_DOC) {
             self.animes_wanted.notify_one();
@@ -661,7 +689,28 @@ pub(crate) mod tests {
             })
             .unwrap();
 
-        for doc in [NOTES_DOC, TASKS_DOC, ANIMES_DOC, DATES_DOC, MUSIC_DOC] {
+        let photo = pc
+            .files
+            .change("d'ajouter", |d| {
+                d.add(
+                    "Eve",
+                    "nous.gif",
+                    10,
+                    "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262",
+                    "image/gif",
+                    1,
+                )
+            })
+            .unwrap();
+        pc.cadres
+            .change("d'ajouter", |d| {
+                d.add("Eve", &photo, std::slice::from_ref(&photo), 1)
+            })
+            .unwrap();
+
+        for doc in [
+            NOTES_DOC, TASKS_DOC, ANIMES_DOC, DATES_DOC, MUSIC_DOC, FILES_DOC, CADRES_DOC,
+        ] {
             let (mut s_pc, mut s_phone) = (SyncState::new(), SyncState::new());
             for _ in 0..10 {
                 let m1 = pc.generate(doc, &mut s_pc).unwrap();
@@ -683,6 +732,8 @@ pub(crate) mod tests {
         assert_eq!(reloaded.animes.lock().list().len(), 1);
         assert_eq!(reloaded.dates.lock().list().len(), 1);
         assert_eq!(reloaded.music.lock().list().len(), 1);
+        let files = reloaded.files.lock().list();
+        assert_eq!(reloaded.cadres.lock().list(&files).len(), 1);
         assert!(phone.generate("inconnu", &mut SyncState::new()).is_err());
         fs::remove_dir_all(a).unwrap();
         fs::remove_dir_all(b).unwrap();

@@ -20,6 +20,24 @@
             android:name="fr.eveetlucas.homewidget.WidgetActionReceiver"
             android:exported="false" />
 
+        <!-- Le widget photo (image ou GIF). -->
+        <receiver
+            android:name="fr.eveetlucas.homewidget.PhotoWidgetProvider"
+            android:exported="true"
+            android:label="@string/photo_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/photo_widget_info" />
+        </receiver>
+
+        <!-- Toucher le widget photo : image suivante. Non exporté. -->
+        <receiver
+            android:name="fr.eveetlucas.homewidget.PhotoWidgetReceiver"
+            android:exported="false" />
+
         <!-- Fournit les lignes de la liste des tâches au lanceur. -->
         <service
             android:name="fr.eveetlucas.homewidget.HomeWidgetService"

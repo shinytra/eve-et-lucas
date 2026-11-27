@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget photo : une image fixe (rognée ou entière), un GIF image par image
+     (ViewFlipper, démarré par le lanceur et arrêté écran éteint), ou un message.
+     Coins arrondis à partir d'Android 12 (clipToOutline). -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/photo_widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/photo_widget_background"
+    android:clipToOutline="true">
+
+    <ImageView
+        android:id="@+id/photo_widget_fill"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/photo_widget_whole"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter"
+        android:visibility="gone" />
+
+    <!-- Pas d'animation entre deux images : juste le changement d'image. -->
+    <ViewFlipper
+        android:id="@+id/photo_widget_flipper"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:autoStart="true"
+        android:flipInterval="100"
+        android:measureAllChildren="false"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/photo_widget_message"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/home_widget_background"
+        android:gravity="center"
+        android:padding="12dp"
+        android:text="@string/photo_widget_empty"
+        android:textColor="@color/home_widget_text_secondary"
+        android:textSize="14sp" />
+</FrameLayout>
