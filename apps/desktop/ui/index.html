@@ -348,7 +348,7 @@
         </div>
 
         <div id="pairing" hidden>
-          <p>Sur l'autre appareil, choisis « Rejoindre » puis scanne ce QR code ou colle le code. Il est valable 10 minutes et ne sert qu'une fois.</p>
+          <p>Copie le code et envoie-le à l'autre appareil (SMS, messagerie…), puis colle-le là-bas dans « Rejoindre avec un code ». L'appareil photo du téléphone peut aussi lire ce QR code et copier le code. Il est valable 10 minutes et ne sert qu'une fois.</p>
           <div id="pair-qr" class="qr"></div>
           <textarea id="pair-code" rows="3" readonly aria-label="Code d'appairage"></textarea>
           <div class="actions">
@@ -361,7 +361,6 @@
           <label for="join-code">Rejoindre avec un code</label>
           <textarea id="join-code" rows="2" placeholder="EL1:…"></textarea>
           <div class="actions">
-            <button type="button" id="join-scan" hidden>Scanner le QR code</button>
             <button type="submit" id="join-submit">Rejoindre</button>
           </div>
         </form>

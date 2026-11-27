@@ -132,7 +132,6 @@ pub fn run() {
     #[cfg(mobile)]
     {
         builder = builder
-            .plugin(tauri_plugin_barcode_scanner::init())
             .plugin(tauri_plugin_geofence::init())
             .plugin(tauri_plugin_home_widget::init())
             .plugin(tauri_plugin_share_target::init())
