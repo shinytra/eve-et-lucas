@@ -72,6 +72,7 @@
 
   refresh();
   refreshOwner();
+  $("author").addEventListener("change", refreshOwner);
   window.addEventListener("hashchange", () => {
     if (location.hash === "#notifications") refreshOwner();
   });
