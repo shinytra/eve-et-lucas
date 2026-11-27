@@ -13,6 +13,7 @@ pub mod devices;
 pub mod files;
 pub mod notes;
 pub mod notify;
+pub mod palette;
 pub mod push;
 pub mod sync;
 pub mod tasks;

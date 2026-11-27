@@ -236,6 +236,7 @@ pub fn run() {
             appearance::import_theme,
             appearance::get_wallpaper,
             appearance::set_wallpaper,
+            appearance::adapt_to_image,
             notify::notification_settings,
             notify::set_notification,
         ])

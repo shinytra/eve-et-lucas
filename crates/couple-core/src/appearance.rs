@@ -114,6 +114,10 @@ pub struct Appearance {
     /// Fond animé (désactivé de toute façon si le système demande moins
     /// d'animations).
     pub animate: bool,
+    /// Couleurs et verre tirés de l'image de fond (voir
+    /// [`Appearance::adapted_to_image`]) : l'appli les recalcule quand
+    /// l'image change. Seulement avec un fond « image ».
+    pub image_colors: bool,
 }
 
 /// Bornes de chaque réglage numérique, partagées avec l'interface.
@@ -186,6 +190,10 @@ impl Appearance {
             fix_color(color, default);
         }
 
+        if self.wallpaper != WallpaperKind::Image {
+            self.image_colors = false;
+        }
+
         let preset = self.preset.trim();
         self.preset = if preset_by_id(preset).is_some() {
             preset.to_owned()
@@ -200,9 +208,12 @@ impl Appearance {
     pub fn to_code(&self) -> Result<String> {
         let mut shared = self.clone();
         // L'image reste sur cet appareil : l'autre reçoit le fond par défaut.
+        // Ses couleurs voyagent quand même : l'autre a des taches de couleur
+        // aux teintes de l'image.
         if shared.wallpaper == WallpaperKind::Image {
             shared.wallpaper = WallpaperKind::Mesh;
         }
+        shared.image_colors = false;
         let json =
             serde_json::to_string(&shared).map_err(|e| Error::InvalidTheme(e.to_string()))?;
         Ok(format!("{CODE_PREFIX}{json}"))
@@ -300,6 +311,7 @@ impl From<Value> for Appearance {
         take_number(&map, "wallpaper_blur", &mut a.wallpaper_blur);
         take_number(&map, "wallpaper_dim", &mut a.wallpaper_dim);
         take(&map, "animate", &mut a.animate);
+        take(&map, "image_colors", &mut a.image_colors);
         a
     }
 }
@@ -367,6 +379,12 @@ impl AppearanceSettings {
     /// Remplace l'apparence actuelle et renvoie la version corrigée.
     pub fn set_current(&mut self, appearance: Appearance) -> Appearance {
         self.current = appearance.sanitized();
+        self.current.clone()
+    }
+
+    /// Couleurs et verre tirés de l'image de fond (échantillon réduit).
+    pub fn adapt_to_image(&mut self, sample: &crate::palette::ImageSample) -> Appearance {
+        self.current = self.current.adapted_to_image(sample);
         self.current.clone()
     }
 
@@ -487,6 +505,7 @@ fn frost() -> Appearance {
         wallpaper_blur: 0,
         wallpaper_dim: 0,
         animate: true,
+        image_colors: false,
     }
 }
 

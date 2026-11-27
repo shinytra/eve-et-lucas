@@ -66,7 +66,7 @@
       "--border-width": `${a.border_width}px`,
       "--border-color": rgba("#ffffff", (a.border_opacity / 100) * (dark ? 0.6 : 1)),
       "--radius": `${a.radius}px`,
-      "--shadow": a.shadow ? `0 ${4 + a.shadow / 10}px ${16 + a.shadow / 3}px rgba(0, 0, 0, ${shadowAlpha.toFixed(3)})` : "none",
+      "--shadow": a.shadow ? `0 ${4 + a.shadow / 10}px ${16 + a.shadow / 3}px rgba(0, 0, 0, ${shadowAlpha.toFixed(3)})` : "0 0 0 transparent", // jamais « none » : style.css y ajoute un liseré
       "--shine": a.shine
         ? `linear-gradient(135deg, rgba(255, 255, 255, ${dark ? 0.12 : 0.45}), rgba(255, 255, 255, 0) 45%)`
         : "none",
@@ -78,6 +78,11 @@
       "--wall-blur": `${a.wallpaper_blur}px`,
       "--wall-dim": String(a.wallpaper_dim / 100),
       "--grain": String((a.grain / 100) * 0.6),
+      // Image de fond : voile de la teinte du verre en haut et en bas de
+      // l'écran (barre du haut, onglets) et liseré lumineux sur le verre,
+      // pour détacher les panneaux d'une photo pleine de détails.
+      "--voile": rgba(a.glass_tint, dark ? 0.5 : 0.4),
+      "--lisere": rgba("#ffffff", dark ? 0.1 : 0.35),
     };
   }
 
@@ -148,6 +153,7 @@
   function replacing(command, args) {
     clearTimeout(saveTimer);
     saveTimer = null;
+    notice = null;
     return write(command, args);
   }
   let view = null; // { current, saved, presets, limits }
@@ -173,7 +179,8 @@
       saveTimer = null;
       try {
         await write("set_appearance", { appearance: current });
-        status("Enregistré");
+        status(notice ?? "Enregistré");
+        notice = null;
       } catch (e) {
         status(String(e), true);
       }
@@ -184,6 +191,7 @@
   function replace(appearance, message) {
     clearTimeout(saveTimer);
     saveTimer = null;
+    notice = null;
     current = appearance;
     apply(current);
     cache(current);
@@ -191,7 +199,17 @@
     status(message);
   }
 
+  // Couleurs tirées de l'image : en choisir une à la main arrête l'option.
+  const COLOR_KEYS = new Set(["accent", "accent2", "text", "glass_tint"]);
+  let notice = null;
+
   function setValue(key, value) {
+    if (current.image_colors && (COLOR_KEYS.has(key) || key.startsWith("wallpaper_colors."))) {
+      current.image_colors = false;
+      notice = "Couleurs de l'image désactivées : tu as choisi une couleur";
+      refreshControls();
+    }
+    if (key === "wallpaper" && value !== "image") current.image_colors = false;
     if (key.startsWith("wallpaper_colors.")) {
       current.wallpaper_colors[Number(key.split(".")[1])] = value;
     } else {
@@ -343,6 +361,28 @@
     const fileInput = el("input", { type: "file", accept: "image/jpeg,image/png,image/webp", hidden: true, onchange: () => pickImage(fileInput) });
     const removeImage = el("button", { type: "button", class: "danger", onclick: () => setImage(null) }, "Retirer l'image");
     controls.push(() => (removeImage.hidden = !wallpaperImage));
+    const imageColors = el("input", {
+      type: "checkbox",
+      role: "switch",
+      onchange: () => {
+        if (imageColors.checked) adaptToImage();
+        else setValue("image_colors", false);
+      },
+    });
+    const imageColorsRow = el(
+      "div",
+      { class: "reglage" },
+      el("label", { class: "interrupteur" }, el("span", {}, "Couleurs de l'appli d'après l'image"), imageColors),
+      el("p", { class: "aide" }, "Les couleurs, la teinte et l'opacité du verre sont tirées de ton image, avec un texte toujours lisible."),
+    );
+    controls.push(() => {
+      imageColors.checked = Boolean(current.image_colors);
+      // Seulement avec le fond « Mon image » : l'option choisit ce fond.
+      imageColorsRow.hidden = !wallpaperImage || current.wallpaper !== "image";
+    });
+    const fromImage = el("p", { class: "aide" }, "Ces couleurs viennent de ton image de fond (onglet Fond). En choisir une autre désactive l'option.");
+    controls.push(() => (fromImage.hidden = !current.image_colors));
+    $("settings").querySelector('[data-panel="couleurs"]').prepend(fromImage);
     $("settings").querySelector('[data-panel="fond"]').append(
       choice("wallpaper", "Type de fond", [
         ["mesh", "Taches de couleur"],
@@ -355,6 +395,7 @@
         { class: "reglage" },
         el("div", { class: "actions" }, removeImage, el("button", { type: "button", onclick: () => fileInput.click() }, "Choisir une image…"), fileInput),
       ),
+      imageColorsRow,
       color("wallpaper_colors.0", "Couleur 1", WALLS),
       color("wallpaper_colors.1", "Couleur 2", WALLS),
       color("wallpaper_colors.2", "Couleur 3", WALLS),
@@ -401,9 +442,58 @@
     }
     wallpaperImage = dataUrl;
     if (dataUrl) current.wallpaper = "image";
-    else if (current.wallpaper === "image") current.wallpaper = "mesh";
+    else if (current.wallpaper === "image") {
+      current.wallpaper = "mesh";
+      current.image_colors = false;
+    }
     refreshControls();
-    changed();
+    // Nouvelle image avec l'option active : on recalcule ses couleurs.
+    if (!(dataUrl && current.image_colors && (await adaptToImage()))) changed();
+  }
+
+  // Image réduite (96 px de côté au plus) en octets RVB et base64, pour le
+  // cœur. Seule la partie visible à l'écran compte : l'image est recadrée
+  // comme le fait `background-size: cover`.
+  function sampleImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Image de fond illisible."));
+      img.onload = () => {
+        const screen = window.innerWidth / Math.max(1, window.innerHeight);
+        let [sw, sh] = [img.width, img.height];
+        if (sw / sh > screen) sw = sh * screen;
+        else sh = sw / screen;
+        const scale = Math.min(1, 96 / Math.max(sw, sh));
+        const w = Math.max(1, Math.round(sw * scale));
+        const h = Math.max(1, Math.round(sh * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(img, (img.width - sw) / 2, (img.height - sh) / 2, sw, sh, 0, 0, w, h);
+        const data = ctx.getImageData(0, 0, w, h).data;
+        let bytes = "";
+        for (let i = 0; i < data.length; i += 4) bytes += String.fromCharCode(data[i], data[i + 1], data[i + 2]);
+        resolve({ pixels: btoa(bytes), width: w, height: h });
+      };
+      img.src = src;
+    });
+  }
+
+  // Renvoie `true` si les couleurs de l'image sont appliquées.
+  async function adaptToImage() {
+    if (!wallpaperImage) return false;
+    status("Analyse de l'image…");
+    try {
+      const sample = await sampleImage(wallpaperImage);
+      await flush();
+      replace(await replacing("adapt_to_image", sample), "Couleurs tirées de ton image");
+      return true;
+    } catch (e) {
+      status(String(e?.message ?? e), true);
+      refreshControls();
+      return false;
+    }
   }
 
   // --- Préréglages et thèmes personnels ---
@@ -494,6 +584,9 @@
               onclick: async () => {
                 try {
                   replace(await replacing("apply_saved_theme", { id: t.id }), `Thème « ${t.name} » appliqué`);
+                  // Thème enregistré avec les couleurs d'une image : on les
+                  // reprend de l'image actuelle.
+                  if (current.image_colors) await adaptToImage();
                 } catch (e) {
                   status(String(e), true);
                 }
