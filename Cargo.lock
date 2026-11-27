@@ -1544,7 +1544,7 @@ dependencies = [
 
 [[package]]
 name = "eve-et-lucas-desktop"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "couple-core",
  "couple-sync",
