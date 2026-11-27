@@ -6,6 +6,7 @@ members = [
   "apps/desktop/src-tauri",
   "plugins/tauri-plugin-geofence",
   "plugins/tauri-plugin-home-widget",
+  "plugins/tauri-plugin-share-target",
 ]
 
 [workspace.package]

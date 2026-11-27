@@ -27,7 +27,7 @@ await call("manage_window", { action: "resize", width: 1100, height: 760, logica
 await js("(() => { location.hash = '#notifications'; location.reload(); return true })()");
 await sleep(1500);
 check("l'écran Notifications est affiché", (await js("(() => getComputedStyle(document.getElementById('ecran-notifications')).display)()")) !== "none");
-check("un interrupteur par type (6)", (await js("(() => document.querySelectorAll('#notif-list input[type=checkbox]').length)()")) === "6");
+check("un interrupteur par type (7)", (await js("(() => document.querySelectorAll('#notif-list input[type=checkbox]').length)()")) === "7");
 check("tout est activé au départ", (await js("(() => [...document.querySelectorAll('#notif-list input')].every(i => i.checked))()")) === "true");
 
 await call("webview_interact", { action: "click", selector: '#notif-list input[data-kind="anime"]' });

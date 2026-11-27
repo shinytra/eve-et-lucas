@@ -4,8 +4,8 @@
 //! cœur (`couple-core`) à l'interface web via des commandes Tauri, enregistre
 //! les documents sur le disque (`store.rs`), les synchronise avec les autres
 //! appareils (`sync.rs`), affiche les rappels des tâches (`reminders.rs`)
-//! et des dates importantes (`dates.rs`), et garde les affiches des animés
-//! (`animes.rs`).
+//! et des dates importantes (`dates.rs`), garde les affiches des animés
+//! (`animes.rs`) et reçoit les musiques partagées (`music.rs`).
 //! Aucune règle métier ici.
 
 use std::{
@@ -23,6 +23,7 @@ mod dates;
 #[cfg(desktop)]
 mod desktop;
 mod files;
+mod music;
 mod notify;
 mod push;
 mod reminders;
@@ -134,11 +135,17 @@ pub fn run() {
             .plugin(tauri_plugin_barcode_scanner::init())
             .plugin(tauri_plugin_geofence::init())
             .plugin(tauri_plugin_home_widget::init())
+            .plugin(tauri_plugin_share_target::init())
             // Économie de batterie : réseau coupé peu après le passage en
             // arrière-plan, rallumé au retour (voir `sync::suspended`).
             .on_window_event(|window, event| match event {
                 tauri::WindowEvent::Suspended => sync::suspended(window.app_handle()),
-                tauri::WindowEvent::Resumed => sync::resumed(window.app_handle()),
+                tauri::WindowEvent::Resumed => {
+                    sync::resumed(window.app_handle());
+                    if let Some(state) = window.app_handle().try_state::<Arc<AppState>>() {
+                        music::resumed(&state);
+                    }
+                }
                 _ => {}
             });
     }
@@ -157,6 +164,9 @@ pub fn run() {
 
     let result = builder
         .plugin(tauri_plugin_notification::init())
+        // Ouvre les musiques dans YouTube Music (seulement depuis Rust : aucune
+        // permission n'est donnée à l'interface).
+        .plugin(tauri_plugin_opener::init())
         .manage(sync::SyncHandle::default())
         .manage(files::Uploads::default())
         .setup(|app| {
@@ -176,6 +186,7 @@ pub fn run() {
             arrivals::start(app.handle(), state.clone());
             widget::start(app.handle(), state.clone());
             animes::start(app.handle(), state.clone());
+            music::start(app.handle(), state.clone());
             push::start(app.handle(), state);
             #[cfg(desktop)]
             desktop::setup(app)?;
@@ -201,6 +212,13 @@ pub fn run() {
             animes::delete_anime,
             animes::anime_statuses,
             animes::anime_cover,
+            music::list_musics,
+            music::add_music,
+            music::update_music,
+            music::set_music_listened,
+            music::delete_music,
+            music::open_music,
+            music::take_music_shares,
             dates::list_dates,
             dates::add_date,
             dates::update_date,

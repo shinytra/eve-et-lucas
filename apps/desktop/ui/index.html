@@ -44,6 +44,10 @@
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm6 3.5v7l6-3.5Z" /></svg>
           <span>Animés</span>
         </a>
+        <a href="#musiques" data-ecran="musiques" class="secondaire">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 3v10.6A4 4 0 1 0 14 17V7h5V3Z" /></svg>
+          <span>Musiques</span>
+        </a>
         <a href="#fichiers" data-ecran="fichiers" class="secondaire">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
           <span>Fichiers</span>
@@ -169,6 +173,32 @@
         <div id="anime-filters" class="filtres" role="group" aria-label="Afficher"></div>
         <p id="animes-empty" class="meta" hidden>Aucun animé pour l'instant : cherchez-en un pour commencer votre liste.</p>
         <ul id="animes"></ul>
+      </section>
+
+      <section id="ecran-musiques" data-ecran="musiques" aria-labelledby="musiques-title" class="musiques verre">
+        <div class="ecran-tete">
+          <h2 id="musiques-title">Musiques</h2>
+          <button type="button" class="ajouter principal" data-form="music-form" aria-expanded="false" aria-controls="music-form">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6Z" /></svg>
+            <span>Recommander</span>
+          </button>
+        </div>
+        <p class="meta">Sur téléphone, le plus rapide : dans YouTube Music, touche <strong>Partager</strong> sur un morceau puis choisis <strong>Eve &amp; Lucas</strong>. Sinon, colle son lien avec « Recommander ».</p>
+        <form id="music-form" class="repliable" autocomplete="off" novalidate>
+          <input id="music-link" type="url" inputmode="url" placeholder="Lien du morceau (YouTube Music ou YouTube)" maxlength="2000" aria-label="Lien du morceau" />
+          <input id="music-title" placeholder="Titre (trouvé tout seul si tu le laisses vide)" maxlength="200" aria-label="Titre" />
+          <input id="music-artist" placeholder="Artiste" maxlength="200" aria-label="Artiste" hidden />
+          <input id="music-message" placeholder="Un petit mot (facultatif)" maxlength="500" aria-label="Petit mot" />
+          <div class="actions">
+            <button type="button" id="music-cancel">Annuler</button>
+            <button type="submit" id="music-save">Ajouter</button>
+          </div>
+        </form>
+        <p id="music-status" class="meta" role="status" hidden></p>
+        <p id="music-error" role="alert" hidden></p>
+        <div id="music-filters" class="filtres" role="group" aria-label="Afficher"></div>
+        <p id="music-empty" class="meta" hidden></p>
+        <ul id="musiques"></ul>
       </section>
 
       <section id="ecran-dates" data-ecran="dates" aria-labelledby="dates-title" class="dates verre">
@@ -357,6 +387,10 @@
             <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm6 3.5v7l6-3.5Z" /></svg>
             <span>Animés</span>
           </a>
+          <a href="#musiques" class="tuile">
+            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 3v10.6A4 4 0 1 0 14 17V7h5V3Z" /></svg>
+            <span>Musiques</span>
+          </a>
           <a href="#fichiers" class="tuile">
             <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
             <span>Fichiers</span>
@@ -466,6 +500,7 @@
     <script src="main.js"></script>
     <script src="tasks.js"></script>
     <script src="animes.js"></script>
+    <script src="music.js"></script>
     <script src="dates.js"></script>
     <script src="files.js"></script>
     <script src="arrivals.js"></script>

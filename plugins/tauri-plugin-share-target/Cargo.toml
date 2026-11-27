@@ -1,0 +1,19 @@
+[package]
+name = "tauri-plugin-share-target"
+version = "0.1.0"
+publish = false
+description = "Menu Partager d'Android : reçoit un lien (musique YouTube Music) envoyé par une autre appli."
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+# Exigé par `tauri-plugin` : doit être identique au nom du crate.
+links = "tauri-plugin-share-target"
+
+[build-dependencies]
+tauri-plugin = { version = "2.7", features = ["build"] }
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tauri = { version = "2.12", default-features = false }

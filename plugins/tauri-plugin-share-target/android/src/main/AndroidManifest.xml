@@ -1,0 +1,23 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Entrée « Eve & Lucas » du menu Partager pour du texte (lien d'un
+             morceau YouTube Music ou YouTube). Exportée : n'importe quelle
+             appli peut y partager, mais seul un lien de morceau YouTube est
+             gardé ensuite (vérifié par le cœur Rust). Sans écran : elle note
+             le texte, ouvre l'appli et se ferme. -->
+        <activity
+            android:name="fr.eveetlucas.sharetarget.ShareReceiverActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:label="Eve &amp; Lucas"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
