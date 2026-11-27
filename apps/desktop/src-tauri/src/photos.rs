@@ -137,7 +137,8 @@ mod prepared {
     }
 
     impl Meta {
-        /// Chemins des images, dans l'ordre de `sequence`.
+        /// Chemins des images différentes, par indice (l'ordre d'affichage
+        /// est donné par `sequence`).
         pub fn frames(&self, dir: &Path) -> Vec<String> {
             (0..self.count)
                 .map(|i| frame_path(dir, i).display().to_string())
@@ -339,10 +340,16 @@ mod phone {
                         pending += 1;
                         continue;
                     }
-                    let bytes = node
-                        .read_blob(&hash)
-                        .await
-                        .map_err(|e| format!("image {} indisponible : {e}", view.file.name))?;
+                    // Un échec (lecture, disque plein…) ne bloque que cette
+                    // image : elle est réessayée au prochain passage.
+                    let bytes = match node.read_blob(&hash).await {
+                        Ok(bytes) => bytes,
+                        Err(e) => {
+                            eprintln!("Image {} du widget indisponible : {e}", view.file.name);
+                            pending += 1;
+                            continue;
+                        }
+                    };
                     let target = dir.clone();
                     let done =
                         tauri::async_runtime::spawn_blocking(move || match prepare(&bytes) {
@@ -352,12 +359,23 @@ mod phone {
                                 prepared::mark_unreadable(&target).map(|()| None)
                             }
                         })
-                        .await
-                        .map_err(|e| e.to_string())?
-                        .map_err(|e| format!("préparation de l'image impossible : {e}"))?;
+                        .await;
                     match done {
-                        Some(meta) => meta,
-                        None => continue,
+                        Ok(Ok(Some(meta))) => meta,
+                        Ok(Ok(None)) => continue,
+                        Ok(Err(e)) => {
+                            eprintln!("Préparation de l'image {} impossible : {e}", view.file.name);
+                            pending += 1;
+                            continue;
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "Préparation de l'image {} interrompue : {e}",
+                                view.file.name
+                            );
+                            pending += 1;
+                            continue;
+                        }
                     }
                 }
             };

@@ -11,7 +11,9 @@
   const errorBox = $("cadres-error");
   const FITS = { remplir: "Remplir le widget", entiere: "Image entière" };
 
-  let previews = [];
+  // Aperçus déjà lus, par empreinte : la liste est redessinée à chaque
+  // fichier reçu, sans relire les images.
+  const previews = new Map();
 
   function showError(message) {
     errorBox.textContent = message ?? "";
@@ -20,9 +22,12 @@
 
   async function preview(cadre, li) {
     try {
-      const buffer = await invoke("file_content", { id: cadre.file.id });
-      const url = URL.createObjectURL(new Blob([buffer], { type: cadre.file.mime }));
-      previews.push(url);
+      let url = previews.get(cadre.file.hash);
+      if (!url) {
+        const buffer = await invoke("file_content", { id: cadre.file.id });
+        url = URL.createObjectURL(new Blob([buffer], { type: cadre.file.mime }));
+        previews.set(cadre.file.hash, url);
+      }
       const img = document.createElement("img");
       img.alt = "";
       img.src = url;
@@ -34,8 +39,13 @@
   }
 
   function render(cadres) {
-    previews.forEach((url) => URL.revokeObjectURL(url));
-    previews = [];
+    const used = new Set(cadres.map((c) => c.file.hash));
+    for (const [hash, url] of previews) {
+      if (!used.has(hash)) {
+        URL.revokeObjectURL(url);
+        previews.delete(hash);
+      }
+    }
     list.replaceChildren(
       ...cadres.map((cadre) => {
         const li = document.createElement("li");
@@ -48,9 +58,8 @@
         name.textContent = cadre.file.name;
         const meta = document.createElement("p");
         meta.className = "meta";
-        const gif = cadre.file.mime === "image/gif" || cadre.file.mime === "image/webp" ? " · animée si c'est un GIF" : "";
         const where = cadre.available ? "" : " · pas encore sur cet appareil";
-        meta.textContent = `Choisie par ${cadre.added_by}${gif}${where}`;
+        meta.textContent = `Choisie par ${cadre.added_by}${where}`;
         texte.append(name, meta);
 
         const fit = document.createElement("select");

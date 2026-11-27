@@ -73,14 +73,13 @@ object PhotoWidgetUpdater {
       views.setViewVisibility(R.id.photo_widget_flipper, View.GONE)
       views.setViewVisibility(R.id.photo_widget_fill, View.GONE)
       views.setViewVisibility(R.id.photo_widget_whole, View.GONE)
-      openAppOnTap(context, views)
+      setTap(context, views, widgetId, content)
       return views
     }
-    val frames = bitmaps.filterNotNull()
+    // Petit écran : toutes les images sont réduites pour tenir dans la limite.
+    val frames = shrink(bitmaps.filterNotNull(), maxBitmapBytes(context))
     views.setViewVisibility(R.id.photo_widget_message, View.GONE)
-    val max = maxBitmapBytes(context)
-    val total = frames.sumOf { it.allocationByteCount.toLong() }
-    if (image.sequence.size > 1 && image.frameMs > 0 && total <= max) {
+    if (image.sequence.size > 1 && image.frameMs > 0) {
       // Animation : une vue par étape ; une même image peut revenir plusieurs
       // fois sans être copiée (RemoteViews ne l'envoie qu'une fois).
       val layout = if (image.fill) R.layout.photo_widget_frame_fill else R.layout.photo_widget_frame_whole
@@ -95,16 +94,21 @@ object PhotoWidgetUpdater {
       views.setViewVisibility(R.id.photo_widget_fill, View.GONE)
       views.setViewVisibility(R.id.photo_widget_whole, View.GONE)
     } else {
-      // Image fixe (ou animation trop lourde pour ce téléphone : sa première image).
       val target = if (image.fill) R.id.photo_widget_fill else R.id.photo_widget_whole
       val other = if (image.fill) R.id.photo_widget_whole else R.id.photo_widget_fill
-      views.setImageViewBitmap(target, fit(frames[image.sequence[0]], max))
+      views.setImageViewBitmap(target, frames[image.sequence[0]])
       views.setContentDescription(target, image.name)
       views.setViewVisibility(target, View.VISIBLE)
       views.setViewVisibility(other, View.GONE)
       views.setViewVisibility(R.id.photo_widget_flipper, View.GONE)
     }
 
+    setTap(context, views, widgetId, content)
+    return views
+  }
+
+  /** Toucher : image suivante s'il y en a plusieurs, sinon ouvrir l'appli. */
+  private fun setTap(context: Context, views: RemoteViews, widgetId: Int, content: PhotoContent?) {
     val count = content?.images?.size ?: 0
     if (count > 1) {
       val next = Intent(context, PhotoWidgetReceiver::class.java)
@@ -120,7 +124,6 @@ object PhotoWidgetUpdater {
     } else {
       openAppOnTap(context, views)
     }
-    return views
   }
 
   private fun openAppOnTap(context: Context, views: RemoteViews) {
@@ -145,13 +148,15 @@ object PhotoWidgetUpdater {
       null
     }
 
-  /** Réduit une image fixe trop grosse pour ce téléphone. */
-  private fun fit(bitmap: Bitmap, max: Long): Bitmap {
-    val bytes = bitmap.allocationByteCount.toLong()
-    if (bytes <= max) return bitmap
-    val scale = Math.sqrt(max.toDouble() / bytes)
-    val w = maxOf(1, (bitmap.width * scale).toInt())
-    val h = maxOf(1, (bitmap.height * scale).toInt())
-    return Bitmap.createScaledBitmap(bitmap, w, h, true)
+  /** Réduit toutes les images d'autant si elles dépassent la limite. */
+  private fun shrink(frames: List<Bitmap>, max: Long): List<Bitmap> {
+    val total = frames.sumOf { it.allocationByteCount.toLong() }
+    if (total <= max || total == 0L) return frames
+    val scale = Math.sqrt(max.toDouble() / total)
+    return frames.map {
+      val w = maxOf(1, (it.width * scale).toInt())
+      val h = maxOf(1, (it.height * scale).toInt())
+      Bitmap.createScaledBitmap(it, w, h, true)
+    }
   }
 }

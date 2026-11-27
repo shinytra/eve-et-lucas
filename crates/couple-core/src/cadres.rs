@@ -38,8 +38,9 @@ pub const FIT_WHOLE: &str = "entiere";
 
 /// Mémoire totale des images préparées (RGBA, 4 octets par pixel). Android
 /// refuse un widget dont les images dépassent 1,5 fois la taille de l'écran
-/// (6,9 Mo pour un écran 720 × 1600) : on reste en dessous partout.
-pub const FRAME_BUDGET: u64 = 5 * 1024 * 1024;
+/// (5,5 Mo pour un écran 720 × 1280, 4,4 Mo avec la marge du widget) : on
+/// reste en dessous. Sur un écran plus petit, le widget réduit encore.
+pub const FRAME_BUDGET: u64 = 4 * 1024 * 1024;
 /// Plus grand côté d'une image fixe préparée, en pixels.
 pub const MAX_STILL_SIDE: u32 = 1024;
 /// Plus grand côté d'une image d'animation, en pixels.
@@ -51,8 +52,17 @@ pub const MAX_FRAMES: usize = 40;
 pub const MIN_FRAME_MS: u32 = 100;
 /// Au-delà, les images suivantes du GIF sont ignorées (temps de calcul).
 const MAX_SOURCE_FRAMES: usize = 1000;
-/// Dimensions maximales de l'image d'origine (photo de 100 Mpx au plus).
+/// Idem au-delà de ce nombre de pixels décodés en tout (un GIF de 10 Mo peut
+/// décrire des centaines d'images de 4096 × 4096).
+const MAX_SOURCE_WORK: u64 = 1_000_000_000;
+/// Dimensions maximales d'une photo d'origine.
 const MAX_SOURCE_SIDE: u32 = 12_000;
+/// Nombre maximal de pixels d'une photo d'origine (50 Mpx : 150 Mo une fois
+/// décodée, la mémoire d'un téléphone n'irait pas beaucoup plus loin).
+const MAX_SOURCE_PIXELS: u64 = 50_000_000;
+/// Dimensions maximales d'une animation : chaque image est décodée en entier
+/// (RGBA), une à la fois.
+const MAX_ANIMATION_SIDE: u32 = 4096;
 /// Mémoire maximale demandée au décodeur.
 const MAX_DECODE_ALLOC: u64 = 512 * 1024 * 1024;
 
@@ -159,9 +169,11 @@ impl CadresDoc {
                     file: file.clone(),
                 })
             })
-            .take(MAX_CADRES)
             .collect();
+        // Les plus récentes d'abord : si une fusion dépasse la limite, ce
+        // sont les plus anciennes qui ne sont plus montrées.
         list.reverse();
+        list.truncate(MAX_CADRES);
         list
     }
 
@@ -226,12 +238,26 @@ impl CadresDoc {
         Ok(cadre)
     }
 
-    /// Retire l'image du widget (le fichier partagé reste).
+    /// Retire l'image du widget (le fichier partagé reste). Les entrées en
+    /// double de la même image (ajoutée sur deux appareils avant leur synchro)
+    /// partent aussi : sinon l'image reviendrait aussitôt.
     pub fn remove(&mut self, id: &str) -> Result<()> {
         if self.doc.get(ROOT, id)?.is_none() {
             return Err(Error::CadreNotFound(id.to_owned()));
         }
+        let twins: Vec<String> = match self.read(id) {
+            Some(cadre) => self
+                .all()
+                .into_iter()
+                .filter(|c| c.file_id == cadre.file_id && c.id != id)
+                .map(|c| c.id)
+                .collect(),
+            None => Vec::new(),
+        };
         self.doc.delete(ROOT, id)?;
+        for twin in twins {
+            self.doc.delete(ROOT, twin.as_str())?;
+        }
         Ok(())
     }
 }
@@ -262,10 +288,10 @@ fn invalid(e: impl std::fmt::Display) -> Error {
     Error::InvalidCadre(format!("image illisible ({e})"))
 }
 
-fn limits() -> Limits {
+fn limits(max_side: u32) -> Limits {
     let mut limits = Limits::default();
-    limits.max_image_width = Some(MAX_SOURCE_SIDE);
-    limits.max_image_height = Some(MAX_SOURCE_SIDE);
+    limits.max_image_width = Some(max_side);
+    limits.max_image_height = Some(max_side);
     limits.max_alloc = Some(MAX_DECODE_ALLOC);
     limits
 }
@@ -283,7 +309,7 @@ pub fn prepare(bytes: &[u8]) -> Result<Prepared> {
     match format {
         ImageFormat::Gif => prepare_animation(|| {
             let mut d = GifDecoder::new(Cursor::new(bytes)).map_err(invalid)?;
-            d.set_limits(limits()).map_err(invalid)?;
+            d.set_limits(limits(MAX_ANIMATION_SIDE)).map_err(invalid)?;
             Ok(d.into_frames())
         }),
         ImageFormat::WebP => {
@@ -291,7 +317,7 @@ pub fn prepare(bytes: &[u8]) -> Result<Prepared> {
             if decoder.has_animation() {
                 prepare_animation(|| {
                     let mut d = WebPDecoder::new(Cursor::new(bytes)).map_err(invalid)?;
-                    d.set_limits(limits()).map_err(invalid)?;
+                    d.set_limits(limits(MAX_ANIMATION_SIDE)).map_err(invalid)?;
                     Ok(d.into_frames())
                 })
             } else {
@@ -309,17 +335,30 @@ fn prepare_still(bytes: &[u8]) -> Result<Prepared> {
     let mut reader = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
         .map_err(invalid)?;
-    reader.limits(limits());
+    reader.limits(limits(MAX_SOURCE_SIDE));
     let mut decoder = reader.into_decoder().map_err(invalid)?;
+    let (width, height) = decoder.dimensions();
+    if u64::from(width) * u64::from(height) > MAX_SOURCE_PIXELS {
+        return Err(Error::InvalidCadre(format!(
+            "photo trop grande ({width} × {height} pixels, {} millions au plus)",
+            MAX_SOURCE_PIXELS / 1_000_000
+        )));
+    }
     let orientation = decoder.orientation().map_err(invalid)?;
-    let mut image = DynamicImage::from_decoder(decoder).map_err(invalid)?;
-    image.apply_orientation(orientation);
-    let rgba = image.into_rgba8();
-    let (w, h) = target_size(rgba.width(), rgba.height(), 1, MAX_STILL_SIDE);
-    let frame = resize(&rgba, w, h);
+    let image = DynamicImage::from_decoder(decoder).map_err(invalid)?;
+    // Réduite d'abord, dans son format d'origine (pas de copie RGBA en
+    // pleine taille), puis redressée : les bornes ne dépendent pas du sens.
+    let (w, h) = target_size(width, height, 1, MAX_STILL_SIDE);
+    let mut small = if (w, h) == (width, height) {
+        image
+    } else {
+        image.resize_exact(w, h, FilterType::Triangle)
+    };
+    small.apply_orientation(orientation);
+    let frame = small.into_rgba8();
     Ok(Prepared {
-        width: w,
-        height: h,
+        width: frame.width(),
+        height: frame.height(),
         frame_ms: 0,
         frames: vec![encode_png(&frame)?],
         sequence: vec![0],
@@ -351,12 +390,19 @@ where
 {
     let mut delays = Vec::new();
     let (mut width, mut height) = (0, 0);
+    let mut work = 0_u64;
     for frame in frames()?.take(MAX_SOURCE_FRAMES) {
         let frame = frame.map_err(invalid)?;
         width = width.max(frame.buffer().width());
         height = height.max(frame.buffer().height());
         delays.push(delay_ms(&frame));
+        work += u64::from(frame.buffer().width()) * u64::from(frame.buffer().height());
+        if work >= MAX_SOURCE_WORK {
+            break;
+        }
     }
+    // Le second passage s'arrête au même endroit.
+    let source_frames = delays.len();
     if delays.is_empty() || width == 0 || height == 0 {
         return Err(Error::InvalidCadre("animation vide".to_owned()));
     }
@@ -372,7 +418,7 @@ where
     };
     let mut out = Vec::with_capacity(unique.len());
     let mut next = unique.iter().copied().peekable();
-    for (i, frame) in frames()?.take(MAX_SOURCE_FRAMES).enumerate() {
+    for (i, frame) in frames()?.take(source_frames).enumerate() {
         let Some(&wanted) = next.peek() else { break };
         let frame = frame.map_err(invalid)?;
         if i == wanted {
@@ -602,6 +648,47 @@ mod tests {
     }
 
     #[test]
+    fn removing_an_image_added_on_two_phones_removes_it_for_good() {
+        let (photo, _, _) = files();
+        let all = vec![photo.clone()];
+        let mut lucas = CadresDoc::new();
+        let mut eve = lucas.fork();
+        lucas.add("Lucas", &photo, &all, 10).unwrap();
+        eve.add("Eve", &photo, &all, 20).unwrap();
+        lucas.merge(&mut eve).unwrap();
+        let shown = lucas.list(&all)[0].cadre.id.clone();
+        lucas.remove(&shown).unwrap();
+        assert!(lucas.list(&all).is_empty());
+        eve.merge(&mut lucas).unwrap();
+        assert!(eve.list(&all).is_empty());
+    }
+
+    #[test]
+    fn newest_images_win_when_a_merge_goes_over_the_limit() {
+        let mut files_doc = FilesDoc::new();
+        let all: Vec<SharedFile> = (0..=MAX_CADRES)
+            .map(|i| {
+                files_doc
+                    .add("Eve", &format!("{i}.png"), 1, HASH, "image/png", i as i64)
+                    .unwrap()
+            })
+            .collect();
+        let mut lucas = CadresDoc::new();
+        for (i, f) in all[..MAX_CADRES - 1].iter().enumerate() {
+            lucas.add("Lucas", f, &all, i as i64).unwrap();
+        }
+        let mut eve = lucas.fork();
+        lucas.add("Lucas", &all[MAX_CADRES - 1], &all, 100).unwrap();
+        let newest = eve.add("Eve", &all[MAX_CADRES], &all, 200).unwrap();
+        lucas.merge(&mut eve).unwrap();
+        let list = lucas.list(&all);
+        assert_eq!(list.len(), MAX_CADRES);
+        assert_eq!(list[0].cadre, newest);
+        // La plus ancienne n'est plus montrée.
+        assert!(list.iter().all(|v| v.file.id != all[0].id));
+    }
+
+    #[test]
     fn concurrent_fit_and_remove_merge() {
         let (photo, _, _) = files();
         let all = vec![photo.clone()];
@@ -720,6 +807,37 @@ mod tests {
         assert_eq!(p.frame_ms, 0);
         assert_eq!((p.width, p.height), (MAX_STILL_SIDE, MAX_STILL_SIDE / 2));
         assert_eq!(decode(&p.frames[0]).dimensions(), (p.width, p.height));
+    }
+
+    #[test]
+    fn huge_photos_are_refused_before_decoding() {
+        // En-tête PNG d'une image de 10 000 × 10 000 (100 Mpx), sans pixels.
+        fn crc32(bytes: &[u8]) -> u32 {
+            let mut crc = 0xFFFF_FFFF_u32;
+            for &b in bytes {
+                crc ^= u32::from(b);
+                for _ in 0..8 {
+                    crc = if crc & 1 == 1 {
+                        (crc >> 1) ^ 0xEDB8_8320
+                    } else {
+                        crc >> 1
+                    };
+                }
+            }
+            !crc
+        }
+        let mut ihdr = b"IHDR".to_vec();
+        ihdr.extend(10_000_u32.to_be_bytes());
+        ihdr.extend(10_000_u32.to_be_bytes());
+        ihdr.extend([8, 0, 0, 0, 0]); // 8 bits, gris, sans entrelacement
+        let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+        for chunk in [ihdr, b"IDAT".to_vec(), b"IEND".to_vec()] {
+            png.extend((chunk.len() as u32 - 4).to_be_bytes());
+            png.extend(&chunk);
+            png.extend(crc32(&chunk).to_be_bytes());
+        }
+        let e = prepare(&png).unwrap_err();
+        assert!(e.to_string().contains("photo trop grande"), "{e}");
     }
 
     #[test]
