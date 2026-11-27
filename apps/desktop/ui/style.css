@@ -2604,3 +2604,83 @@ main > section.entree {
 body.bienvenue-ouverte {
   overflow: hidden;
 }
+
+/* ---------- Widget photo (écran Fichiers) ---------- */
+
+.cadres-bloc {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--field-bg);
+}
+
+.cadres-bloc h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.cadres-bloc .meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+#cadres {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.cadre {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.cadre .texte {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.cadre .name {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.cadre .actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.cadre .actions select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Vignette carrée, comme un widget 2 × 2. */
+.cadre .vignette {
+  width: 56px;
+  height: 56px;
+  grid-column: 1;
+  grid-row: 1;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.cadre .vignette.entiere {
+  object-fit: contain;
+}
+
+#cadres-error {
+  margin: 0;
+  color: var(--danger);
+}
