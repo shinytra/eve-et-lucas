@@ -23,6 +23,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const js = (script) => call("webview_execute_js", { script });
 
 await call("driver_session", { action: "start", host: "127.0.0.1", port: 9223 });
+// Prénom de l'appareil déjà choisi : pas de fenêtre de bienvenue (dossier de données neuf).
+await call("ipc_execute_command", { command: "set_arrival_person", args: { who: "Lucas" } });
+await js("(() => { location.reload(); return true })()");
+await sleep(1500);
 await call("ipc_execute_command", { command: "add_note", args: { author: "Lucas", title: "Écrite sur le PC", body: "" } });
 
 // L'utilisateur clique sur « Appairer un appareil ».

@@ -18,7 +18,7 @@
   // Affiche le prénom partout (sans prévenir les autres écrans).
   function montrer(prenom) {
     author.value = prenom;
-    pastille.textContent = prenom.charAt(0);
+    pastille.textContent = prenom ? prenom.charAt(0) : "?";
     pastille.title = `Je suis ${prenom}`;
     pastille.setAttribute("aria-label", `Paramètres : je suis ${prenom}`);
     document.querySelectorAll(".choix-moi [data-moi]").forEach((b) => {
@@ -39,19 +39,24 @@
     box.hidden = !message;
   }
 
+  // Prénom inconnu (premier lancement) : #author reste vide, l'accueil ne
+  // salue personne et la fenêtre de bienvenue empêche tout ajout.
+  let enCache = "";
   try {
     const saved = localStorage.getItem(CACHE_KEY);
-    if (PRENOMS.includes(saved)) montrer(saved);
-    else montrer(author.value);
-  } catch {
-    montrer(author.value);
-  }
+    if (PRENOMS.includes(saved)) enCache = saved;
+  } catch {}
+  montrer(enCache);
 
   const invoke = window.__TAURI__?.core?.invoke;
   if (!invoke) return;
 
+  // Un choix fait ici l'emporte sur la première lecture, si elle répond après.
+  let choisi = false;
+
   async function choisir(prenom, boiteErreur) {
     erreur(boiteErreur, null);
+    choisi = true;
     try {
       await invoke("set_arrival_person", { who: prenom });
     } catch (e) {
@@ -65,10 +70,14 @@
     return true;
   }
 
+  // Le reste de l'appli, inaccessible (souris et clavier) tant qu'on n'a pas choisi.
+  const arriere = () => document.querySelectorAll("body > :not(#bienvenue):not(script)");
+
   function ouvrirBienvenue() {
     // Rien de présélectionné : c'est à la personne de dire qui elle est.
-    bienvenue.querySelectorAll("[data-moi]").forEach((b) => b.setAttribute("aria-checked", "false"));
-    pastille.textContent = "?";
+    montrer("");
+    author.dispatchEvent(new Event("change"));
+    arriere().forEach((e) => (e.inert = true));
     bienvenue.hidden = false;
     document.body.classList.add("bienvenue-ouverte");
     bienvenue.querySelector(".bienvenue-corps")?.focus({ preventScroll: true });
@@ -79,6 +88,7 @@
     const fin = () => {
       bienvenue.hidden = true;
       bienvenue.classList.remove("sortie");
+      arriere().forEach((e) => (e.inert = false));
       document.body.classList.remove("bienvenue-ouverte");
     };
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) fin();
@@ -99,14 +109,21 @@
     .querySelectorAll("[data-moi]")
     .forEach((b) => b.addEventListener("click", () => choisir(b.dataset.moi, "moi-error")));
 
-  $("params-apparence").addEventListener("click", () => $("open-settings").click());
+  // Le bouton de l'en-tête ouvre ou ferme : on ne le presse que si c'est fermé.
+  $("params-apparence").addEventListener("click", () => {
+    if ($("settings").hidden) $("open-settings").click();
+  });
 
   // Le choix enregistré par Rust fait foi ; s'il n'y en a pas encore, c'est
   // le premier lancement (ou une version d'avant ce réglage) : on demande.
   invoke("arrival_person")
     .then((who) => {
+      if (choisi) return;
       const prenom = PRENOMS.find((p) => p.toLowerCase() === String(who).trim().toLowerCase());
-      if (!prenom) {
+      // Pas encore de prénom, ou une copie locale qui dit autre chose (ancien
+      // sélecteur « Je suis » différent du choix d'« Arrivée à la maison ») :
+      // on demande plutôt que de changer de prénom en silence.
+      if (!prenom || (enCache && enCache !== prenom)) {
         ouvrirBienvenue();
         return;
       }
@@ -116,7 +133,8 @@
       if (change) author.dispatchEvent(new Event("change"));
     })
     .catch((e) => {
-      // Sans réponse, on garde la copie locale plutôt que de bloquer l'appli.
+      // Sans réponse, on garde la copie locale ; sans elle, on demande.
       console.error("Prénom de l'appareil indisponible :", e);
+      if (!choisi && !enCache) ouvrirBienvenue();
     });
 })();

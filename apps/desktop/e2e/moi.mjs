@@ -32,11 +32,14 @@ await js("(() => { location.hash = ''; location.reload(); return true })()");
 await sleep(1500);
 if ((await personne()) === "") {
   check("premier lancement : la fenêtre Bienvenue est affichée", await bienvenueVisible());
+  check("le reste de l'appli est inaccessible (inert)", (await js("(() => document.querySelector('main').inert && document.getElementById('nav').inert)()")) === "true");
+  check("l'accueil ne salue personne avant le choix", (await js("(() => document.getElementById('accueil-title').textContent)()")).match(/^Bon(jour|soir) 👋$/) !== null);
   check("aucun prénom présélectionné", (await js("(() => document.querySelectorAll('#bienvenue [aria-checked=\"true\"]').length)()")) === "0");
   await call("webview_screenshot", { format: "png", filePath: `${outDir}/bienvenue-telephone.png` });
   await call("webview_interact", { action: "click", selector: '#bienvenue [data-moi="Eve"]' });
   await sleep(800);
   check("« Je suis Eve » ferme la fenêtre", !(await bienvenueVisible()));
+  check("et rend l'appli accessible", (await js("(() => document.querySelector('main').inert)()")) === "false");
   check("et enregistre Eve pour cet appareil", (await personne()) === "Eve");
   check("l'accueil salue Eve", (await js("(() => document.getElementById('accueil-title').textContent)()")).includes("Eve"));
   check("la pastille de l'en-tête montre « E »", (await js("(() => document.getElementById('moi-pastille').textContent)()")) === "E");
