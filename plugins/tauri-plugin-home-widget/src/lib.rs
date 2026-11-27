@@ -11,6 +11,10 @@
 //! [`HomeWidget::ack_actions`] (au démarrage, ou quand l'évènement
 //! [`HomeWidget::on_action`] la prévient alors qu'elle tourne déjà).
 //!
+//! Le widget « Photo » (redimensionnable) montre une image ou un GIF choisi
+//! dans l'appli ([`HomeWidget::update_photos`]) ; le toucher passe à l'image
+//! suivante.
+//!
 //! Sur PC, chaque appel est sans effet.
 
 use tauri::{

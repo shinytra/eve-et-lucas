@@ -17,4 +17,7 @@ uuid.workspace = true
 aes-gcm = "0.10"
 data-encoding = "2"
 serde_json.workspace = true
+# Widget photo : lecture des images et découpe des GIF (déjà dans l'arbre via
+# Tauri ; seuls les formats utiles sont activés).
+image = { version = "0.25", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 

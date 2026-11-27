@@ -8,6 +8,7 @@ pub mod anilist;
 pub mod animes;
 pub mod appearance;
 pub mod arrivals;
+pub mod cadres;
 pub mod dates;
 pub mod devices;
 pub mod files;
@@ -19,11 +20,13 @@ pub mod presence;
 pub mod push;
 pub mod sync;
 pub mod tasks;
+pub mod update;
 pub mod widget;
 
 pub use animes::{Anime, AnimeInfo, AnimesDoc};
 pub use appearance::{Appearance, AppearanceSettings};
 pub use arrivals::{Arrival, ArrivalsDoc};
+pub use cadres::{Cadre, CadreView, CadresDoc};
 pub use dates::{DateInput, DateReminder, DatesDoc, Day, ImportantDate, UpcomingDate};
 pub use devices::{Device, DevicesDoc};
 pub use files::{FilesDoc, SharedFile};
@@ -82,6 +85,10 @@ pub enum Error {
     FileTooLarge(u64),
     #[error("fichier invalide : {0}")]
     InvalidFile(String),
+    #[error("cette image n'est plus sur le widget ({0})")]
+    CadreNotFound(String),
+    #[error("widget photo : {0}")]
+    InvalidCadre(String),
     #[error("la date {0} n'existe pas")]
     DateNotFound(String),
     #[error("date invalide : {0}")]
@@ -104,6 +111,8 @@ pub enum Error {
     TooManyThemes(usize),
     #[error("image de fond refusée : {0}")]
     InvalidWallpaper(String),
+    #[error("mise à jour refusée : {0}")]
+    InvalidUpdate(String),
     // Les erreurs des bibliothèques sont « boxées » pour garder `Error` petit.
     #[error("document Automerge invalide : {0}")]
     Automerge(Box<automerge::AutomergeError>),

@@ -116,6 +116,7 @@
           </div>
           <a href="#maison" id="accueil-arrivee" class="carte verre carte-petite" hidden></a>
           <a href="#notes" id="accueil-note" class="carte verre carte-petite" hidden></a>
+          <a href="#parametres" id="accueil-maj" class="carte verre carte-petite" hidden></a>
         </div>
         <p id="accueil-error" role="alert" hidden></p>
       </section>
@@ -342,6 +343,18 @@
           <a href="#maison">Lieux et présence</a>
           <a href="#appareils">Appareils</a>
         </div>
+        <!-- Mise à jour depuis l'appli (maj.js, src/update.rs). -->
+        <h3>Mise à jour</h3>
+        <div class="maj">
+          <p id="maj-etat" class="meta">Version installée : …</p>
+          <p id="maj-notes" class="maj-notes" hidden></p>
+          <div id="maj-barre" class="barre-episodes maj-barre" hidden><i></i></div>
+          <div class="maj-actions">
+            <button type="button" id="maj-installer" class="principal" hidden>Mettre à jour</button>
+            <button type="button" id="maj-chercher">Rechercher une mise à jour</button>
+          </div>
+          <p id="maj-error" role="alert" hidden></p>
+        </div>
       </section>
 
       <section id="ecran-fichiers" data-ecran="fichiers" aria-labelledby="files-title" class="files verre">
@@ -355,6 +368,13 @@
         </div>
         <p id="file-status" class="meta" hidden></p>
         <p id="file-error" role="alert" hidden></p>
+        <div class="cadres-bloc" aria-labelledby="cadres-title">
+          <h3 id="cadres-title">Sur le widget photo</h3>
+          <p class="meta">Sur le téléphone, pose le widget « Photo Eve &amp; Lucas » et donne-lui la taille que tu veux. Touche-le pour passer à l'image suivante. Les images choisies ici vont aussi sur le widget de l'autre.</p>
+          <p id="cadres-empty" class="meta">Aucune image pour l'instant : touche l'icône <span aria-hidden="true">🖼</span> d'une image ou d'un GIF ci-dessous.</p>
+          <ul id="cadres"></ul>
+          <p id="cadres-error" role="alert" hidden></p>
+        </div>
         <p id="files-empty" class="meta" hidden>Aucun fichier pour l'instant.</p>
         <ul id="files"></ul>
       </section>
@@ -523,9 +543,11 @@
     <script src="music.js"></script>
     <script src="dates.js"></script>
     <script src="files.js"></script>
+    <script src="photos.js"></script>
     <script src="arrivals.js"></script>
     <script src="notifications.js"></script>
     <script src="devices.js"></script>
     <script src="accueil.js"></script>
+    <script src="maj.js"></script>
   </body>
 </html>

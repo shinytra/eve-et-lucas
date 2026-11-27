@@ -27,6 +27,8 @@ pub fn plugins<R: Runtime>(builder: Builder<R>) -> Builder<R> {
             MacosLauncher::LaunchAgent,
             Some(vec![MINIMIZED_ARG]),
         ))
+        // Adresse des versions donnée par `update.rs` (dépôt de `couple_core::update`).
+        .plugin(tauri_plugin_updater::Builder::new().build())
 }
 
 /// Icône de la barre des tâches et fenêtre de départ.

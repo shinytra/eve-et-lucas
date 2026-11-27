@@ -21,4 +21,10 @@
     <string name="home_widget_preview_task1_sub">pour Lucas · aujourd\'hui 19 h</string>
     <string name="home_widget_preview_task2">Arroser les plantes</string>
     <string name="home_widget_preview_task2_sub">demain</string>
+    <!-- Widget photo. -->
+    <string name="photo_widget_label">Photo Eve &amp; Lucas</string>
+    <string name="photo_widget_description">Une image ou un GIF choisi dans l\'appli, à la taille que tu veux. Touche-le pour passer à l\'image suivante.</string>
+    <string name="photo_widget_empty">Choisis une image dans l\'appli : Fichiers, puis « Sur le widget »</string>
+    <string name="photo_widget_pending">L\'image arrive de l\'autre appareil…</string>
+    <string name="photo_widget_stale">Ouvre l\'appli pour mettre à jour</string>
 </resources>
