@@ -133,7 +133,14 @@ pub fn run() {
         builder = builder
             .plugin(tauri_plugin_barcode_scanner::init())
             .plugin(tauri_plugin_geofence::init())
-            .plugin(tauri_plugin_home_widget::init());
+            .plugin(tauri_plugin_home_widget::init())
+            // Économie de batterie : réseau coupé peu après le passage en
+            // arrière-plan, rallumé au retour (voir `sync::suspended`).
+            .on_window_event(|window, event| match event {
+                tauri::WindowEvent::Suspended => sync::suspended(window.app_handle()),
+                tauri::WindowEvent::Resumed => sync::resumed(window.app_handle()),
+                _ => {}
+            });
     }
 
     // Uniquement avec `--features mcp-bridge` (jamais dans une version

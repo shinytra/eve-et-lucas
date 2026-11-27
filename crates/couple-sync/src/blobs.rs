@@ -16,7 +16,7 @@ use iroh_blobs::{
     Hash,
 };
 
-use crate::{net, Result, Shared, Store, SyncError, SyncNode, CONNECT_TIMEOUT};
+use crate::{net, Result, Shared, Store, SyncError, SyncNode};
 
 /// Délai maximal pour télécharger un fichier (jusqu'à 500 Mo par un relais).
 const FETCH_TIMEOUT: Duration = Duration::from_secs(30 * 60);
@@ -92,6 +92,21 @@ pub(crate) fn only_peers<S: Store>(shared: Arc<Shared<S>>) -> EventSender {
         }
     });
     tx
+}
+
+/// Protocole des fichiers dont l'arrêt (pause du nœud) ne ferme pas le
+/// stockage : il sert encore pendant la pause et après la reprise. Il est
+/// fermé par [`SyncNode::shutdown`].
+#[derive(Debug, Clone)]
+pub(crate) struct KeepStore(pub(crate) iroh_blobs::BlobsProtocol);
+
+impl iroh::protocol::ProtocolHandler for KeepStore {
+    async fn accept(
+        &self,
+        conn: iroh::endpoint::Connection,
+    ) -> std::result::Result<(), iroh::protocol::AcceptError> {
+        self.0.accept(conn).await
+    }
 }
 
 impl<S: Store> SyncNode<S> {
@@ -226,6 +241,7 @@ impl<S: Store> SyncNode<S> {
     }
 
     async fn fetch_from(&self, peer: iroh::EndpointId, hash: Hash) -> Result<()> {
+        let endpoint = self.endpoint()?;
         // Étiqueté avant de commencer : le ménage ne touche pas à un
         // téléchargement en cours, et une partie reçue sert à reprendre.
         self.protect(hash).await?;
@@ -235,13 +251,7 @@ impl<S: Store> SyncNode<S> {
             .get(&peer)
             .cloned()
             .unwrap_or_else(|| EndpointAddr::new(peer));
-        let conn = tokio::time::timeout(
-            CONNECT_TIMEOUT,
-            self.router.endpoint().connect(addr, iroh_blobs::ALPN),
-        )
-        .await
-        .map_err(|_| SyncError::Timeout)?
-        .map_err(net)?;
+        let conn = crate::connect(&endpoint, addr, iroh_blobs::ALPN).await?;
         let result = tokio::time::timeout(
             FETCH_TIMEOUT,
             self.blobs.api().remote().fetch(conn.clone(), hash),
@@ -260,8 +270,15 @@ impl<S: Store> SyncNode<S> {
     /// Télécharge chez `peer` les fichiers voulus qui manquent (à appeler
     /// après une synchro). Un échec n'empêche pas les autres (réessayé plus
     /// tard). Renvoie les empreintes téléchargées.
+    ///
+    /// Un appareil qui n'a pas répondu à la dernière synchro est sauté : chaque
+    /// fichier manquant coûterait sinon une tentative de connexion (et un
+    /// réveil de la radio) à chaque passage.
     pub async fn fetch_wanted_from(&self, peer: iroh::EndpointId) -> Vec<String> {
         let mut downloaded = Vec::new();
+        if !self.is_reachable(peer) || self.is_paused() {
+            return downloaded;
+        }
         for hash in self.shared.store.wanted_blobs() {
             let Ok(parsed) = parse(&hash) else { continue };
             if self.blobs.api().has(parsed).await.unwrap_or(false) {
@@ -273,10 +290,16 @@ impl<S: Store> SyncNode<S> {
             }
             match self.fetch_from(peer, parsed).await {
                 Ok(()) => downloaded.push(hash),
-                Err(e) => eprintln!(
-                    "Fichier {} non téléchargé depuis {peer} : {e}",
-                    parsed.fmt_short()
-                ),
+                Err(e) => {
+                    eprintln!(
+                        "Fichier {} non téléchargé depuis {peer} : {e}",
+                        parsed.fmt_short()
+                    );
+                    // Appareil parti entre-temps : les autres fichiers attendront.
+                    if matches!(e, SyncError::Unreachable(_) | SyncError::Paused) {
+                        break;
+                    }
+                }
             }
         }
         if !downloaded.is_empty() {
