@@ -58,6 +58,11 @@ jobs:
           "$build_tools/zipalign" -P 16 -f 4 "$unsigned" "$RUNNER_TEMP/aligne.apk"
           "$build_tools/apksigner" sign --ks "$RUNNER_TEMP/essai.jks" --ks-pass "pass:$pass" \
             --out "$RUNNER_TEMP/essai.apk" "$RUNNER_TEMP/aligne.apk"
+      # Place disque pour l'émulateur (outils inutiles ici).
+      - name: Libérer de la place
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost /opt/hostedtoolcache/CodeQL
+          df -h "$RUNNER_TEMP"
       - name: Activer KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -78,7 +83,8 @@ jobs:
           echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
           echo no | "$sdk/avdmanager" create avd -n essai -k "$image" -d pixel_6 \
             -p "$ANDROID_AVD_HOME/essai.avd" --force
-          ls -la "$ANDROID_AVD_HOME"
+          # Le profil pixel_6 demande 7 Go de données : 2 Go suffisent ici.
+          echo "disk.dataPartition.size=2G" >> "$ANDROID_AVD_HOME/essai.avd/config.ini"
           "$ANDROID_HOME/emulator/emulator" -avd essai -no-window -no-audio -no-boot-anim \
             -gpu swiftshader_indirect -camera-back emulated -no-snapshot > "$RUNNER_TEMP/emulateur.log" 2>&1 &
           demarre=
