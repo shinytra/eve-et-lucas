@@ -59,6 +59,13 @@ const MAX_ROUNDS: usize = 200;
 const IO_TIMEOUT: Duration = Duration::from_secs(30);
 /// Délai maximal pour joindre un appareil (téléphone en veille, PC éteint…).
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// Attente avant de réessayer un appareil injoignable, doublée à chaque échec
+/// (2, 4, 8 min…) jusqu'à [`RETRY_MAX`]. Chaque tentative réveille la radio
+/// du téléphone pendant une vingtaine de secondes : inutile de le faire toutes
+/// les minutes pour un PC éteint. Une modification locale, une connexion de
+/// cet appareil ou [`SyncNode::retry_now`] fait réessayer aussitôt.
+const RETRY_MIN: Duration = Duration::from_secs(2 * 60);
+const RETRY_MAX: Duration = Duration::from_secs(15 * 60);
 
 /// Erreurs de la synchro.
 #[derive(Debug, thiserror::Error)]
@@ -77,6 +84,34 @@ pub enum SyncError {
     Protocol(String),
     #[error("stockage : {0}")]
     Store(String),
+    #[error("synchro en pause (appli en arrière-plan)")]
+    Paused,
+    #[error("appareil injoignable : {0}")]
+    Unreachable(String),
+}
+
+impl SyncError {
+    /// L'appareil n'a pas pu être joint ou a cessé de répondre (en veille,
+    /// éteint, hors réseau) : normal, pas une panne.
+    pub fn is_unreachable(&self) -> bool {
+        matches!(
+            self,
+            Self::Unreachable(_) | Self::Timeout | Self::Network(_)
+        )
+    }
+}
+
+/// Ouvre une connexion ; un échec ici veut dire que l'appareil est absent
+/// ([`SyncError::Unreachable`], qui seul déclenche l'attente avant de réessayer).
+pub(crate) async fn connect(
+    endpoint: &Endpoint,
+    addr: EndpointAddr,
+    alpn: &[u8],
+) -> Result<Connection> {
+    tokio::time::timeout(CONNECT_TIMEOUT, endpoint.connect(addr, alpn))
+        .await
+        .map_err(|_| SyncError::Unreachable("pas de réponse".to_owned()))?
+        .map_err(|e| SyncError::Unreachable(e.to_string()))
 }
 
 pub type Result<T> = std::result::Result<T, SyncError>;
@@ -207,11 +242,26 @@ struct Pending {
     expires: Instant,
 }
 
+/// Un appareil qui n'a pas répondu : combien de fois, et quand réessayer.
+#[derive(Debug, Clone, Copy)]
+struct Absent {
+    failures: u32,
+    retry_at: Instant,
+}
+
+/// Attente après `failures` échecs de suite.
+fn retry_delay(failures: u32) -> Duration {
+    let doublings = failures.saturating_sub(1).min(8);
+    RETRY_MIN.saturating_mul(1 << doublings).min(RETRY_MAX)
+}
+
 pub(crate) struct Shared<S: Store> {
     pub(crate) store: Arc<S>,
     pending: Mutex<Option<Pending>>,
     /// Adresses connues (apprises à l'appairage) pour joindre un pair sans annuaire.
     addrs: Mutex<HashMap<EndpointId, EndpointAddr>>,
+    /// Appareils injoignables lors des dernières tentatives.
+    absent: Mutex<HashMap<EndpointId, Absent>>,
 }
 
 impl<S: Store> Shared<S> {
@@ -221,11 +271,47 @@ impl<S: Store> Shared<S> {
     fn pending(&self) -> MutexGuard<'_, Option<Pending>> {
         self.pending.lock().unwrap_or_else(|e| e.into_inner())
     }
+    fn absent(&self) -> MutexGuard<'_, HashMap<EndpointId, Absent>> {
+        self.absent.lock().unwrap_or_else(|e| e.into_inner())
+    }
+    /// Note le résultat d'une tentative de connexion à `peer`.
+    fn record(&self, peer: EndpointId, result: std::result::Result<(), &SyncError>) {
+        let mut absent = self.absent();
+        match result {
+            Ok(()) => {
+                absent.remove(&peer);
+            }
+            Err(SyncError::Unreachable(_)) => {
+                let failures = absent.get(&peer).map_or(0, |a| a.failures) + 1;
+                absent.insert(
+                    peer,
+                    Absent {
+                        failures,
+                        retry_at: Instant::now() + retry_delay(failures),
+                    },
+                );
+            }
+            // Connexion établie puis perdue, pause, erreur de protocole ou de
+            // stockage : l'appareil était là, on réessaie normalement.
+            Err(_) => {}
+        }
+    }
 }
 
 /// Un appareil en ligne, prêt à appairer et synchroniser.
+///
+/// Le nœud peut être mis en pause ([`SyncNode::pause`]) : la connexion au
+/// relais (un ping toutes les 15 s) et les sondages réseau d'iroh (toutes les
+/// 20 à 26 s) s'arrêtent, ce qui laisse dormir la radio du téléphone quand
+/// l'appli est en arrière-plan. Les documents et les fichiers restent
+/// disponibles ; [`SyncNode::resume`] reconnecte.
 pub struct SyncNode<S: Store> {
-    router: Router,
+    secret: SecretKey,
+    network: Network,
+    /// `None` pendant une pause.
+    router: Mutex<Option<Router>>,
+    /// Une pause ou une reprise à la fois.
+    lifecycle: tokio::sync::Mutex<()>,
     shared: Arc<Shared<S>>,
     blobs: blobs::Blobs,
 }
@@ -254,39 +340,120 @@ impl<S: Store> SyncNode<S> {
         network: Network,
         blobs: blobs::Blobs,
     ) -> Result<Self> {
-        let builder = match network {
-            Network::Online => Endpoint::builder(iroh::endpoint::presets::N0),
-            Network::Local => Endpoint::builder(iroh::endpoint::presets::Minimal)
-                .relay_mode(iroh::RelayMode::Disabled),
-        };
-        let endpoint = builder.secret_key(secret).bind().await.map_err(net)?;
         let shared = Arc::new(Shared {
             store,
             pending: Mutex::new(None),
             addrs: Mutex::new(HashMap::new()),
+            absent: Mutex::new(HashMap::new()),
         });
-        let only_peers = blobs::only_peers(shared.clone());
-        let router = Router::builder(endpoint)
-            .accept(SYNC_ALPN, SyncHandler(shared.clone()))
-            .accept(PAIR_ALPN, PairHandler(shared.clone()))
-            .accept(
-                iroh_blobs::ALPN,
-                iroh_blobs::BlobsProtocol::new(blobs.api(), Some(only_peers)),
-            )
-            .spawn();
+        let router = start_router(&secret, network, &shared, &blobs).await?;
         Ok(Self {
-            router,
+            secret,
+            network,
+            router: Mutex::new(Some(router)),
+            lifecycle: tokio::sync::Mutex::new(()),
             shared,
             blobs,
         })
     }
 
-    pub fn id(&self) -> EndpointId {
-        self.router.endpoint().id()
+    fn router(&self) -> Result<Router> {
+        self.router
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+            .ok_or(SyncError::Paused)
     }
 
+    pub(crate) fn endpoint(&self) -> Result<Endpoint> {
+        Ok(self.router()?.endpoint().clone())
+    }
+
+    /// Le nœud est-il en pause ?
+    pub fn is_paused(&self) -> bool {
+        self.router
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_none()
+    }
+
+    /// Met le nœud en pause : plus aucun échange réseau, et les autres
+    /// appareils ne peuvent plus le joindre. Sans effet s'il l'est déjà.
+    pub async fn pause(&self) {
+        self.pause_if(|| true).await;
+    }
+
+    /// Comme [`SyncNode::pause`], si `still_wanted()` le confirme une fois
+    /// le tour venu (une reprise demandée entre-temps l'emporte). Renvoie
+    /// `true` si le nœud a été mis en pause.
+    pub async fn pause_if(&self, still_wanted: impl FnOnce() -> bool) -> bool {
+        let _turn = self.lifecycle.lock().await;
+        if !still_wanted() {
+            return false;
+        }
+        let router = self.router.lock().unwrap_or_else(|e| e.into_inner()).take();
+        let paused = router.is_some();
+        if let Some(router) = router {
+            let _ = router.shutdown().await;
+        }
+        paused
+    }
+
+    /// Reconnecte le nœud après une pause. Sans effet s'il tourne déjà.
+    pub async fn resume(&self) -> Result<()> {
+        let _turn = self.lifecycle.lock().await;
+        if !self.is_paused() {
+            return Ok(());
+        }
+        let router = start_router(&self.secret, self.network, &self.shared, &self.blobs).await?;
+        *self.router.lock().unwrap_or_else(|e| e.into_inner()) = Some(router);
+        Ok(())
+    }
+
+    /// Le réseau a peut-être changé (Wi-Fi ↔ données mobiles, retour de
+    /// veille) : iroh refait ses sondages, et les appareils injoignables sont
+    /// réessayés dès la prochaine synchro. Android ne prévient pas le code
+    /// natif de ces changements : l'appli appelle ceci au retour au premier plan.
+    pub async fn network_change(&self) {
+        self.retry_now();
+        if let Ok(endpoint) = self.endpoint() {
+            endpoint.network_change().await;
+        }
+    }
+
+    /// Oublie les échecs passés : tous les appareils seront réessayés.
+    pub fn retry_now(&self) {
+        self.shared.absent().clear();
+    }
+
+    /// Appareils appairés à essayer maintenant (ceux qui n'ont pas répondu
+    /// récemment attendent leur tour, voir [`RETRY_MIN`]).
+    pub fn peers_due(&self) -> Vec<EndpointId> {
+        let now = Instant::now();
+        let absent = self.shared.absent();
+        self.shared
+            .store
+            .peers()
+            .into_iter()
+            .filter(|p| *p != self.id() && absent.get(p).is_none_or(|a| a.retry_at <= now))
+            .collect()
+    }
+
+    /// L'appareil a-t-il répondu à la dernière tentative ?
+    pub fn is_reachable(&self, peer: EndpointId) -> bool {
+        !self.shared.absent().contains_key(&peer)
+    }
+
+    pub fn id(&self) -> EndpointId {
+        self.secret.public()
+    }
+
+    /// Adresse de cet appareil (seulement l'identifiant pendant une pause).
     pub fn addr(&self) -> EndpointAddr {
-        self.router.endpoint().addr()
+        match self.endpoint() {
+            Ok(endpoint) => endpoint.addr(),
+            Err(_) => EndpointAddr::new(self.id()),
+        }
     }
 
     /// Mémorise l'adresse directe d'un appareil (sinon il est cherché via
@@ -297,7 +464,10 @@ impl<S: Store> SyncNode<S> {
 
     /// Attend d'être joignable (relais contacté), au plus `timeout`.
     pub async fn wait_online(&self, timeout: Duration) -> bool {
-        tokio::time::timeout(timeout, self.router.endpoint().online())
+        let Ok(endpoint) = self.endpoint() else {
+            return false;
+        };
+        tokio::time::timeout(timeout, endpoint.online())
             .await
             .is_ok()
     }
@@ -327,7 +497,7 @@ impl<S: Store> SyncNode<S> {
     pub async fn join(&self, code: &str) -> Result<JoinOutcome> {
         let code = PairingCode::decode(code)?;
         let host_id = code.host.id;
-        let conn = timeout(self.router.endpoint().connect(code.host.clone(), PAIR_ALPN))
+        let conn = timeout(self.endpoint()?.connect(code.host.clone(), PAIR_ALPN))
             .await?
             .map_err(net)?;
         let (mut send, mut recv) = conn.open_bi().await.map_err(net)?;
@@ -360,19 +530,20 @@ impl<S: Store> SyncNode<S> {
 
     /// Se synchronise avec un appareil appairé.
     pub async fn sync_with(&self, peer: EndpointId) -> Result<SyncReport> {
+        let result = self.sync_with_inner(peer).await;
+        self.shared.record(peer, result.as_ref().map(|_| ()));
+        result
+    }
+
+    async fn sync_with_inner(&self, peer: EndpointId) -> Result<SyncReport> {
+        let endpoint = self.endpoint()?;
         let addr = self
             .shared
             .addrs()
             .get(&peer)
             .cloned()
             .unwrap_or_else(|| EndpointAddr::new(peer));
-        let conn = tokio::time::timeout(
-            CONNECT_TIMEOUT,
-            self.router.endpoint().connect(addr, SYNC_ALPN),
-        )
-        .await
-        .map_err(|_| SyncError::Timeout)?
-        .map_err(net)?;
+        let conn = connect(&endpoint, addr, SYNC_ALPN).await?;
         let mut report = SyncReport::default();
         for doc in self.shared.store.doc_names() {
             let (mut send, mut recv) = conn.open_bi().await.map_err(net)?;
@@ -390,18 +561,36 @@ impl<S: Store> SyncNode<S> {
     /// Se synchronise avec tous les appareils appairés. Un appareil injoignable
     /// (téléphone en veille, PC éteint) n'empêche pas les autres.
     pub async fn sync_all(&self) -> Vec<(EndpointId, Result<SyncReport>)> {
+        let peers: Vec<_> = self
+            .shared
+            .store
+            .peers()
+            .into_iter()
+            .filter(|p| *p != self.id())
+            .collect();
+        self.sync_peers(peers).await
+    }
+
+    /// Comme [`SyncNode::sync_all`], sans les appareils qui n'ont pas répondu
+    /// récemment et dont le tour n'est pas venu ([`SyncNode::peers_due`]).
+    pub async fn sync_due(&self) -> Vec<(EndpointId, Result<SyncReport>)> {
+        self.sync_peers(self.peers_due()).await
+    }
+
+    async fn sync_peers(&self, peers: Vec<EndpointId>) -> Vec<(EndpointId, Result<SyncReport>)> {
         let mut results = Vec::new();
-        for peer in self.shared.store.peers() {
-            if peer != self.id() {
-                results.push((peer, self.sync_with(peer).await));
-            }
+        for peer in peers {
+            results.push((peer, self.sync_with(peer).await));
         }
         results
     }
 
     /// Arrête proprement le nœud.
     pub async fn shutdown(self) {
-        let _ = self.router.shutdown().await;
+        self.pause().await;
+        if let Err(e) = self.blobs.api().shutdown().await {
+            eprintln!("Arrêt du stockage des fichiers : {e}");
+        }
     }
 }
 
@@ -526,6 +715,8 @@ impl<S: Store> ProtocolHandler for SyncHandler<S> {
             conn.close(1u32.into(), b"appareil non appaire");
             return Ok(());
         }
+        // Il vient de nous joindre : inutile d'attendre pour le réessayer.
+        self.0.absent().remove(&peer);
         let known_docs = self.0.store.doc_names();
         // Un flux par document, ouvert par l'appareil qui a lancé la synchro.
         while let Ok((mut send, mut recv)) = conn.accept_bi().await {
@@ -612,6 +803,49 @@ impl<S: Store> ProtocolHandler for PairHandler<S> {
     }
 }
 
+/// Démarre la connexion au réseau et les protocoles acceptés.
+async fn start_router<S: Store>(
+    secret: &SecretKey,
+    network: Network,
+    shared: &Arc<Shared<S>>,
+    blobs: &blobs::Blobs,
+) -> Result<Router> {
+    let builder = match network {
+        Network::Online => Endpoint::builder(iroh::endpoint::presets::N0),
+        Network::Local => Endpoint::builder(iroh::endpoint::presets::Minimal)
+            .relay_mode(iroh::RelayMode::Disabled),
+    };
+    let endpoint = builder
+        .secret_key(secret.clone())
+        .bind()
+        .await
+        .map_err(net)?;
+    let only_peers = blobs::only_peers(shared.clone());
+    Ok(Router::builder(endpoint)
+        .accept(SYNC_ALPN, SyncHandler(shared.clone()))
+        .accept(PAIR_ALPN, PairHandler(shared.clone()))
+        .accept(
+            iroh_blobs::ALPN,
+            blobs::KeepStore(iroh_blobs::BlobsProtocol::new(
+                blobs.api(),
+                Some(only_peers),
+            )),
+        )
+        .spawn())
+}
+
 fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retry_delay_doubles_up_to_the_cap() {
+        let minutes = |n| retry_delay(n).as_secs() / 60;
+        assert_eq!([1, 2, 3, 4, 5, 100].map(minutes), [2, 4, 8, 15, 15, 15]);
+        assert_eq!(retry_delay(0), RETRY_MIN);
+    }
 }

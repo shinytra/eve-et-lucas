@@ -348,3 +348,88 @@ async fn unpaired_device_cannot_fetch_files() {
     assert!(stranger.fetch_blob(&hash).await.is_err());
     assert!(!stranger.has_blob(&hash).await);
 }
+
+#[tokio::test]
+async fn unreachable_device_waits_before_retry_until_it_shows_up() {
+    let (_, pc) = node("PC").await;
+    let (_, lucas) = node("Lucas").await;
+    lucas
+        .join(&pc.start_pairing(TTL).unwrap().encode())
+        .await
+        .unwrap();
+    assert_eq!(lucas.peers_due(), vec![pc.id()]);
+
+    // PC en pause (éteint) : la tentative échoue, puis il attend son tour.
+    pc.pause().await;
+    let results = lucas.sync_due().await;
+    assert!(matches!(
+        results[0].1,
+        Err(couple_sync::SyncError::Unreachable(_))
+    ));
+    assert!(!lucas.is_reachable(pc.id()));
+    assert!(lucas.peers_due().is_empty());
+    assert!(
+        lucas.sync_due().await.is_empty(),
+        "pas de nouvelle tentative"
+    );
+    // Une synchro demandée explicitement essaie quand même tout le monde.
+    assert_eq!(lucas.sync_all().await.len(), 1);
+
+    // Le PC revient et se synchronise de lui-même : Lucas le réessaie aussitôt.
+    pc.resume().await.unwrap();
+    lucas.add_addr(pc.addr());
+    pc.sync_with(lucas.id()).await.unwrap();
+    assert!(lucas.is_reachable(pc.id()));
+    assert_eq!(lucas.peers_due(), vec![pc.id()]);
+
+    // Même chose après un changement de réseau.
+    pc.pause().await;
+    lucas.sync_due().await;
+    assert!(lucas.peers_due().is_empty());
+    lucas.network_change().await;
+    assert_eq!(lucas.peers_due(), vec![pc.id()]);
+    pc.shutdown().await;
+    lucas.shutdown().await;
+}
+
+#[tokio::test]
+async fn paused_node_keeps_its_files_and_syncs_after_resume() {
+    let (pc_store, pc) = node("PC").await;
+    let (lucas_store, lucas) = node("Lucas").await;
+    lucas
+        .join(&pc.start_pairing(TTL).unwrap().encode())
+        .await
+        .unwrap();
+    let hash = lucas.add_blob(b"photo".to_vec()).await.unwrap();
+
+    // Une pause annulée au dernier moment (retour au premier plan).
+    assert!(!lucas.pause_if(|| false).await);
+    assert!(!lucas.is_paused());
+    assert!(lucas.pause_if(|| true).await);
+    assert!(lucas.is_paused());
+    lucas.pause().await; // sans effet
+    assert!(matches!(
+        lucas.sync_with(pc.id()).await,
+        Err(couple_sync::SyncError::Paused)
+    ));
+    // Une pause ne dit rien de l'autre appareil.
+    assert!(lucas.is_reachable(pc.id()));
+    // Le stockage des fichiers reste ouvert pendant la pause.
+    assert_eq!(lucas.read_blob(&hash).await.unwrap(), b"photo");
+
+    pc_store.add("Pendant la pause");
+    lucas.resume().await.unwrap();
+    lucas.resume().await.unwrap(); // sans effet
+    assert!(!lucas.is_paused());
+    pc.add_addr(lucas.addr());
+    lucas.sync_with(pc.id()).await.unwrap();
+    assert!(lucas_store
+        .titles()
+        .contains(&"Pendant la pause".to_string()));
+    assert_eq!(lucas.read_blob(&hash).await.unwrap(), b"photo");
+    // Les fichiers sont toujours servis après la reprise.
+    pc_store.wanted.lock().unwrap().push(hash.clone());
+    assert_eq!(pc.fetch_wanted_from(lucas.id()).await, vec![hash]);
+    pc.shutdown().await;
+    lucas.shutdown().await;
+}

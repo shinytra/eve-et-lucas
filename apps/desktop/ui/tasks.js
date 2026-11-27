@@ -180,7 +180,17 @@
 
   refresh();
   // « En retard » change avec l'heure, même sans modification.
-  setInterval(refresh, 60_000);
+  // Seulement si l'écran est affiché (batterie) : rattrapé en y revenant.
+  const affiche = () => !document.hidden && window.__ui?.ecran() === "taches";
+  setInterval(() => {
+    if (affiche()) refresh();
+  }, 60_000);
+  document.addEventListener("ecran", ({ detail }) => {
+    if (detail === "taches") refresh();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (affiche()) refresh();
+  });
   tauri.event?.listen("docs-changed", (event) => {
     if (event.payload?.includes("tasks")) refresh();
   });

@@ -236,7 +236,17 @@
   syncCountBox();
   refresh();
   // Le compte à rebours change à minuit, même sans modification.
-  setInterval(refresh, 60_000);
+  // Seulement si l'écran est affiché (batterie) : rattrapé en y revenant.
+  const affiche = () => !document.hidden && window.__ui?.ecran() === "dates";
+  setInterval(() => {
+    if (affiche()) refresh();
+  }, 60_000);
+  document.addEventListener("ecran", ({ detail }) => {
+    if (detail === "dates") refresh();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (affiche()) refresh();
+  });
   tauri.event?.listen("docs-changed", (event) => {
     if (event.payload?.includes("dates")) refresh();
   });
