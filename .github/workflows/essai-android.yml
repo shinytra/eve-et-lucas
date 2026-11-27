@@ -72,7 +72,13 @@ jobs:
           "$sdk/sdkmanager" "emulator" "platform-tools" "$image" > /dev/null
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
           echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
-          echo no | "$sdk/avdmanager" create avd -n essai -k "$image" -d pixel_6 --force
+          # avdmanager et l'émulateur doivent chercher les AVD au même endroit.
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+          echo no | "$sdk/avdmanager" create avd -n essai -k "$image" -d pixel_6 \
+            -p "$ANDROID_AVD_HOME/essai.avd" --force
+          ls -la "$ANDROID_AVD_HOME"
           "$ANDROID_HOME/emulator/emulator" -avd essai -no-window -no-audio -no-boot-anim \
             -gpu swiftshader_indirect -camera-back emulated -no-snapshot > "$RUNNER_TEMP/emulateur.log" 2>&1 &
           demarre=
