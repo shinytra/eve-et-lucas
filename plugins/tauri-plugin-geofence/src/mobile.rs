@@ -27,16 +27,40 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
 pub struct Geofence<R: Runtime>(PluginHandle<R>);
 
 impl<R: Runtime> Geofence<R> {
-    pub fn set_home(&self, lat: f64, lng: f64, radius_m: f32) -> Result<()> {
-        let args = HomeArgs::new(lat, lng, radius_m)?;
+    /// Ajoute un lieu à la position donnée (le téléphone y est : il compte
+    /// comme une entrée, sans faire sonner).
+    pub fn add_place(
+        &self,
+        name: &str,
+        kind: &str,
+        announce: bool,
+        lat: f64,
+        lng: f64,
+        radius_m: f32,
+    ) -> Result<Place> {
+        let args = HomeArgs::new(name, kind, announce, lat, lng, radius_m)?;
         self.0
-            .run_mobile_plugin("setHome", args)
+            .run_mobile_plugin("addPlace", args)
             .map_err(Into::into)
     }
 
-    pub fn clear_home(&self) -> Result<()> {
+    pub fn rename_place(&self, id: String, name: &str) -> Result<()> {
+        let name = clean_name(name)?;
         self.0
-            .run_mobile_plugin("clearHome", ())
+            .run_mobile_plugin("renamePlace", RenameArgs { id, name })
+            .map_err(Into::into)
+    }
+
+    pub fn remove_place(&self, id: String) -> Result<()> {
+        self.0
+            .run_mobile_plugin("removePlace", IdArgs { id })
+            .map_err(Into::into)
+    }
+
+    pub fn list_places(&self) -> Result<Vec<Place>> {
+        self.0
+            .run_mobile_plugin::<Places>("listPlaces", ())
+            .map(|p| p.places)
             .map_err(Into::into)
     }
 

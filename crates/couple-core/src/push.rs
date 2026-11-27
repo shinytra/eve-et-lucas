@@ -23,7 +23,7 @@ use autosurgeon::{hydrate_prop, reconcile_prop, Hydrate, Reconcile};
 use data_encoding::BASE64;
 use serde::{Deserialize, Serialize};
 
-use crate::{sync::Syncable, Arrival, Error, Result};
+use crate::{sync::Syncable, Arrival, Error, PresenceEvent, Result};
 
 const KEY_PROP: &str = "key";
 const TARGET_PREFIX: &str = "target:";
@@ -201,6 +201,16 @@ pub struct PushMessage {
     pub title: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub body: String,
+    /// Arrivées et présences (`kind` = `presence`) : nom et type du lieu
+    /// (voir [`crate::presence`]). Absents d'une nouveauté.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub place: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub place_kind: String,
+    /// Présences seulement : entrée dans un lieu (`true`) ou sortie de tous
+    /// (`false`). Une arrivée est toujours une entrée.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inside: Option<bool>,
 }
 
 impl PushMessage {
@@ -215,7 +225,32 @@ impl PushMessage {
             item: String::new(),
             title: String::new(),
             body: String::new(),
+            place: String::new(),
+            place_kind: String::new(),
+            inside: None,
         }
+    }
+
+    /// Où en est la personne, si le message est une arrivée ou une présence
+    /// (version 1). Une arrivée d'avant les lieux nommés : à la maison.
+    pub fn presence(&self) -> Option<PresenceEvent> {
+        if self.v != 1 || self.who.trim().is_empty() {
+            return None;
+        }
+        let inside = match self.kind.as_str() {
+            "arrival" => true,
+            "presence" => self.inside?,
+            _ => return None,
+        };
+        Some(PresenceEvent {
+            id: self.id.clone(),
+            who: self.who.clone(),
+            device: self.device.clone(),
+            at: self.at,
+            inside,
+            place: self.place.clone(),
+            place_kind: self.place_kind.clone(),
+        })
     }
 
     /// L'arrivée annoncée, si le message en est une (version 1).
@@ -282,7 +317,44 @@ mod tests {
             item: String::new(),
             title: String::new(),
             body: String::new(),
+            place: String::new(),
+            place_kind: String::new(),
+            inside: None,
         }
+    }
+
+    #[test]
+    fn presence_messages_from_android() {
+        // Tel que PushCrypto.kt (ArrivalPayload.encode) l'écrit.
+        let exit: PushMessage = serde_json::from_str(
+            r#"{"v":1,"kind":"presence","id":"x","who":"Eve","device":"d","at":5,"inside":false,"place":"Université","place_kind":"etudes"}"#,
+        )
+        .unwrap();
+        let p = exit.presence().unwrap();
+        assert!(!p.inside);
+        assert_eq!(
+            (p.place.as_str(), p.place_kind.as_str()),
+            ("Université", "etudes")
+        );
+        // Une présence n'est pas une arrivée : elle ne fait pas sonner.
+        assert!(exit.into_arrival().is_none());
+        let arrival: PushMessage = serde_json::from_str(
+            r#"{"v":1,"kind":"arrival","id":"y","who":"Eve","device":"d","at":5,"place":"Maison 2","place_kind":"maison"}"#,
+        )
+        .unwrap();
+        let p = arrival.presence().unwrap();
+        assert!(p.inside);
+        assert_eq!(p.place, "Maison 2");
+        assert!(arrival.into_arrival().is_some());
+        // Ancienne arrivée, sans lieu : à la maison.
+        let p = message().presence().unwrap();
+        assert!(p.inside && p.place.is_empty());
+        // Présence sans « inside », ou nouveauté : rien.
+        let mut odd = message();
+        odd.kind = "presence".into();
+        assert!(odd.presence().is_none());
+        odd.kind = "note".into();
+        assert!(odd.presence().is_none());
     }
 
     #[test]

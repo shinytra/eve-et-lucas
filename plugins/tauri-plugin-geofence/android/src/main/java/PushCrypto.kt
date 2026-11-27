@@ -153,31 +153,58 @@ object EventPayload {
   }
 }
 
-/** Une arrivée transmise par ntfy (celle d'un autre appareil, ou la nôtre à envoyer). */
-data class ArrivalMessage(val id: String, val who: String, val device: String, val at: Long)
+/**
+ * Une arrivée ou une présence transmise par ntfy (celle d'un autre appareil,
+ * ou la nôtre à envoyer). [kind] : `arrival` (fait sonner) ou `presence`.
+ */
+data class ArrivalMessage(
+  val id: String,
+  val who: String,
+  val device: String,
+  val at: Long,
+  val kind: String = KIND_ARRIVAL,
+  val inside: Boolean = true,
+  val place: String = "",
+  val placeKind: String = ""
+)
 
 /**
- * Clair des messages : `{"v":1,"kind":"arrival","id":…,"who":…,"device":…,"at":…}`.
- * Champs inconnus ignorés ; autre version ou autre type : ignoré.
+ * Clair des messages : `{"v":1,"kind":"arrival","id":…,"who":…,"device":…,"at":…}`,
+ * avec `place` et `place_kind` (lieu entré) si connus ; présence :
+ * `"kind":"presence"` et `"inside":true|false` en plus (même format que
+ * `PushMessage` dans le cœur Rust). Champs inconnus ignorés ; autre version
+ * ou autre type : ignoré.
  */
 object ArrivalPayload {
   private val UUID_RE =
     Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
   private const val MAX_WHO_LEN = 64
   private const val MAX_DEVICE_LEN = 128
+  private const val MAX_PLACE_LEN = 40
 
   fun encode(arrival: ArrivalMessage): String {
     val json = JSONObject()
     json.put("v", 1)
-    json.put("kind", "arrival")
+    json.put("kind", arrival.kind)
     json.put("id", arrival.id)
     json.put("who", arrival.who)
     json.put("device", arrival.device)
     json.put("at", arrival.at)
+    if (arrival.place.isNotEmpty()) json.put("place", arrival.place)
+    if (arrival.placeKind.isNotEmpty()) json.put("place_kind", arrival.placeKind)
+    if (arrival.kind == KIND_PRESENCE) json.put("inside", arrival.inside)
     return json.toString()
   }
 
-  /** Arrivée lue, ou `null` si le texte n'en est pas une (raison dans le journal de l'appelant). */
+  /** Nom de lieu sur une ligne, coupé à 40 caractères (points de code). */
+  private fun cleanPlace(text: String): String {
+    val flat = text.split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ")
+      .filter { !it.isISOControl() }
+    if (flat.codePointCount(0, flat.length) <= MAX_PLACE_LEN) return flat
+    return flat.substring(0, flat.offsetByCodePoints(0, MAX_PLACE_LEN))
+  }
+
+  /** Message lu, ou `null` si le texte n'en est pas un (raison dans le journal de l'appelant). */
   fun decode(text: String): ArrivalMessage? {
     val json = try {
       JSONObject(text)
@@ -186,7 +213,8 @@ object ArrivalPayload {
     }
     val v = json.opt("v")
     if (!((v is Int && v == 1) || (v is Long && v == 1L))) return null
-    if (json.opt("kind") != "arrival") return null
+    val kind = json.opt("kind") as? String ?: return null
+    if (kind != KIND_ARRIVAL && kind != KIND_PRESENCE) return null
     val id = json.opt("id") as? String ?: return null
     if (!UUID_RE.matches(id)) return null
     val who = (json.opt("who") as? String)?.trim() ?: return null
@@ -198,6 +226,13 @@ object ArrivalPayload {
       is Long -> raw
       else -> return null
     }
-    return ArrivalMessage(id, who, device, at)
+    val inside = if (kind == KIND_PRESENCE) {
+      json.opt("inside") as? Boolean ?: return null
+    } else {
+      true
+    }
+    val place = cleanPlace(json.opt("place") as? String ?: "")
+    val placeKind = (json.opt("place_kind") as? String)?.takeIf { it in PlaceKinds.ALL } ?: ""
+    return ArrivalMessage(id, who, device, at, kind, inside, place, placeKind)
   }
 }

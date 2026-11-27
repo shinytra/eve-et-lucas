@@ -82,12 +82,18 @@ object HomeWidgetUpdater {
       views.setOnClickPendingIntent(R.id.home_widget_title, open)
     }
 
+    // Où est l'autre ; sinon (aucun lieu enregistré), la dernière arrivée.
+    val presence = content?.presence.orEmpty()
     val arrival = content?.lastArrival
-    if (arrival != null) {
-      views.setTextViewText(
-        R.id.home_widget_arrival,
-        FrenchFormat.arrival(arrival.who, arrival.at, now)
-      )
+    val whereText = when {
+      presence.isNotEmpty() -> presence.joinToString("\n") {
+        FrenchFormat.presence(it.who, it.inside, it.place, it.placeKind, it.at, now)
+      }
+      arrival != null -> FrenchFormat.arrival(arrival.who, arrival.at, now)
+      else -> null
+    }
+    if (whereText != null) {
+      views.setTextViewText(R.id.home_widget_arrival, whereText)
       views.setViewVisibility(R.id.home_widget_arrival, View.VISIBLE)
     } else {
       views.setViewVisibility(R.id.home_widget_arrival, View.GONE)

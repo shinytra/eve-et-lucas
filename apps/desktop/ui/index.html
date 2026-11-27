@@ -54,7 +54,7 @@
         </a>
         <a href="#maison" data-ecran="maison" class="secondaire">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.6A2.6 2.6 0 1 1 12 6.4a2.6 2.6 0 0 1 0 5.2Z" /></svg>
-          <span>Arrivée</span>
+          <span>Lieux</span>
         </a>
         <a href="#notifications" data-ecran="notifications" class="secondaire">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.4-2H9.6a2.5 2.5 0 0 0 2.4 2Zm7-6v-5a7 7 0 0 0-5.5-6.8V3a1.5 1.5 0 0 0-3 0v1.2A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z" /></svg>
@@ -279,21 +279,42 @@
       </section>
 
       <section id="ecran-maison" data-ecran="maison" aria-labelledby="home-title" class="home verre">
-        <h2 id="home-title">Arrivée à la maison</h2>
-        <p class="meta">Quand l'un de vous approche de la maison, son téléphone prévient les autres appareils, qui sonnent. Pour qu'ils sonnent même appli fermée, installe l'appli ntfy (Play Store ou F-Droid) sur chaque téléphone : le message passe par ntfy.sh, chiffré, et le PC l'écoute aussi.</p>
+        <h2 id="home-title">Lieux et présence</h2>
+        <p class="meta">Chacun enregistre ses lieux sur son téléphone (maison, université, travail…) : l'appli et le widget montrent alors où est l'autre, ou « ailleurs ». Android surveille les zones lui-même, sans GPS en continu. Arriver dans un lieu annoncé fait sonner les autres appareils. Pour être prévenu même appli fermée, installe l'appli ntfy (Play Store ou F-Droid) sur chaque téléphone : le message passe par ntfy.sh, chiffré, et le PC l'écoute aussi.</p>
+        <ul id="presence" class="presence" aria-label="Où est chacun"></ul>
+        <p id="presence-empty" class="meta" hidden>Personne n'a encore enregistré de lieu.</p>
         <div id="home-phone" hidden>
+          <h3>Mes lieux</h3>
           <p id="home-who" class="meta"></p>
-          <p id="home-state" class="meta"></p>
+          <ul id="places" class="places"></ul>
+          <p id="places-empty" class="meta" hidden>Aucun lieu enregistré sur ce téléphone.</p>
+          <form id="place-form" class="place-form" novalidate>
+            <label>
+              Nom du lieu
+              <input id="place-name" maxlength="40" autocomplete="off" placeholder="Maison, Université, Chez Eve 2…" />
+            </label>
+            <label>
+              Type
+              <select id="place-kind">
+                <option value="maison">🏠 Maison</option>
+                <option value="etudes">🎓 Études</option>
+                <option value="travail">💼 Travail</option>
+                <option value="autre">📍 Autre</option>
+              </select>
+            </label>
+            <label class="check">
+              <input id="place-announce" type="checkbox" checked />
+              Faire sonner les autres quand j'arrive ici
+            </label>
+            <button type="submit" id="place-add">Je suis ici : ajouter ce lieu</button>
+          </form>
           <label class="check">
             <input id="home-ring" type="checkbox" />
             Sonner aussi sur ce téléphone en arrivant
           </label>
-          <div class="actions">
-            <button type="button" id="home-clear" class="danger" hidden>Ne plus surveiller</button>
-            <button type="button" id="home-set">Je suis à la maison : enregistrer ici</button>
-          </div>
         </div>
         <p id="home-error" role="alert" hidden></p>
+        <h3>Dernières arrivées</h3>
         <ul id="arrivals"></ul>
       </section>
 
@@ -318,7 +339,7 @@
         <div class="liens-reglages">
           <button type="button" id="params-apparence">Apparence</button>
           <a href="#notifications">Notifications</a>
-          <a href="#maison">Arrivée à la maison</a>
+          <a href="#maison">Lieux et présence</a>
           <a href="#appareils">Appareils</a>
         </div>
       </section>
@@ -396,7 +417,7 @@
           </a>
           <a href="#maison" class="tuile">
             <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.6A2.6 2.6 0 1 1 12 6.4a2.6 2.6 0 0 1 0 5.2Z" /></svg>
-            <span>Arrivée</span>
+            <span>Lieux</span>
           </a>
           <a href="#notifications" class="tuile">
             <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.4-2H9.6a2.5 2.5 0 0 0 2.4 2Zm7-6v-5a7 7 0 0 0-5.5-6.8V3a1.5 1.5 0 0 0-3 0v1.2A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z" /></svg>

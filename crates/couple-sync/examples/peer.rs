@@ -1,12 +1,14 @@
 //! Faux téléphone pour tester l'appli PC à la main ou par script :
-//! rejoint l'appareil qui affiche le code, ajoute une note et une arrivée à la
-//! maison (« Eve »), synchronise, puis affiche les notes reçues.
+//! rejoint l'appareil qui affiche le code, ajoute une note, une arrivée à la
+//! maison (« Eve ») et sa présence à l'université, synchronise, puis affiche les notes reçues.
 //!
 //! Usage : `cargo run -p couple-sync --example peer -- "EL1:…" "Titre de la note"`
 
 use std::sync::{Arc, Mutex};
 
-use couple_core::{ArrivalsDoc, DevicesDoc, NotesDoc, SyncState, Syncable};
+use couple_core::{
+    ArrivalsDoc, DevicesDoc, NotesDoc, PresenceDoc, PresenceEvent, SyncState, Syncable,
+};
 use couple_sync::{iroh::SecretKey, Network, Store, SyncNode};
 use iroh::EndpointId;
 
@@ -15,6 +17,7 @@ struct Phone {
     notes: Mutex<NotesDoc>,
     devices: Mutex<DevicesDoc>,
     arrivals: Mutex<ArrivalsDoc>,
+    presence: Mutex<PresenceDoc>,
 }
 
 impl Phone {
@@ -23,6 +26,7 @@ impl Phone {
             "notes" => Ok(f(&mut *self.notes.lock().unwrap())),
             "devices" => Ok(f(&mut *self.devices.lock().unwrap())),
             "arrivals" => Ok(f(&mut *self.arrivals.lock().unwrap())),
+            "presence" => Ok(f(&mut *self.presence.lock().unwrap())),
             _ => Err(format!("document inconnu {doc}")),
         }
     }
@@ -30,7 +34,12 @@ impl Phone {
 
 impl Store for Phone {
     fn doc_names(&self) -> Vec<String> {
-        vec!["devices".into(), "notes".into(), "arrivals".into()]
+        vec![
+            "devices".into(),
+            "notes".into(),
+            "arrivals".into(),
+            "presence".into(),
+        ]
     }
     fn generate(&self, doc: &str, state: &mut SyncState) -> Result<Option<Vec<u8>>, String> {
         self.with(doc, |d| d.generate_sync_message(state))
@@ -78,6 +87,7 @@ async fn main() {
         notes: Mutex::new(NotesDoc::new()),
         devices: Mutex::new(DevicesDoc::new()),
         arrivals: Mutex::new(ArrivalsDoc::new()),
+        presence: Mutex::new(PresenceDoc::new()),
     });
     phone
         .devices
@@ -102,6 +112,20 @@ async fn main() {
         .unwrap()
         .add("Eve", &phone.id.to_string(), now)
         .unwrap();
+    phone
+        .presence
+        .lock()
+        .unwrap()
+        .record(&PresenceEvent {
+            id: uuid_like(now),
+            who: "Eve".into(),
+            device: phone.id.to_string(),
+            at: now,
+            inside: true,
+            place: "Université".into(),
+            place_kind: "etudes".into(),
+        })
+        .unwrap();
 
     let node = SyncNode::spawn(secret, phone.clone(), Network::Local)
         .await
@@ -122,4 +146,9 @@ async fn main() {
         println!("appareil : {}", device.name);
     }
     node.shutdown().await;
+}
+
+/// Identifiant unique suffisant pour un test.
+fn uuid_like(now: i64) -> String {
+    format!("presence-{now}")
 }

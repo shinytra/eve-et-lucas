@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-rename-place"
+description = "Enables the rename_place command without any pre-configured scope."
+commands.allow = ["rename_place"]
+
+[[permission]]
+identifier = "deny-rename-place"
+description = "Denies the rename_place command without any pre-configured scope."
+commands.deny = ["rename_place"]

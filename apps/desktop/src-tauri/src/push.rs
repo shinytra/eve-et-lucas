@@ -12,11 +12,32 @@
 
 use std::sync::Arc;
 
-use couple_core::{arrivals::RING_WITHIN_MS, Arrival};
+use couple_core::{arrivals::RING_WITHIN_MS, Arrival, PresenceEvent};
 use couple_sync::Store;
 use tauri::AppHandle;
 
 use crate::store::{AppState, ARRIVALS_DOC, PUSH_DOC};
+
+/// Ajoute une présence reçue par ntfy (entrée dans un lieu ou sortie). Mêmes
+/// règles qu'[`accept`], sans limite d'âge : la plus récente l'emporte de
+/// toute façon. `Ok(false)` : appareil pas encore connu, à garder.
+pub(crate) fn accept_presence(state: &AppState, event: &PresenceEvent) -> Result<bool, String> {
+    let now = crate::now_ms();
+    if event.device == state.self_id.to_string() || event.at > now + 60_000 {
+        return Ok(true);
+    }
+    let known = state
+        .devices
+        .lock()
+        .list()
+        .iter()
+        .any(|d| d.id == event.device);
+    if !known {
+        return Ok(false);
+    }
+    crate::arrivals::record_presence(state, event)?;
+    Ok(true)
+}
 
 /// Prépare le réveil : crée la clé commune si besoin, puis lance l'écoute
 /// (PC) ou la configuration du plugin (téléphone).
@@ -252,6 +273,12 @@ mod desktop {
                 return None;
             }
         };
+        // Où est l'autre : une arrivée compte aussi comme entrée dans un lieu.
+        if let Some(presence) = message.presence() {
+            if let Err(e) = super::accept_presence(state, &presence) {
+                state.notice(e);
+            }
+        }
         if let Some(arrival) = message.clone().into_arrival() {
             // Appareil inconnu (`Ok(false)`) : rien à garder sur PC, le
             // sujet est rattrapé au démarrage et la synchro suivra.
@@ -327,6 +354,39 @@ mod desktop {
         }
 
         #[test]
+        fn received_presence_updates_where_the_other_is() {
+            let dir = crate::store::tests::temp_dir("push-presence");
+            let state = AppState::load(&dir, "PC").unwrap();
+            state.push.change("", |d| d.ensure_key()).unwrap();
+            state
+                .devices
+                .change("", |d| d.upsert("tel-eve", "Téléphone d'Eve", 1))
+                .unwrap();
+            let key = state.push.lock().key().unwrap();
+            let mut message = PushMessage::arrival(&Arrival {
+                id: "s1".into(),
+                who: "Eve".into(),
+                device: "tel-eve".into(),
+                at: now_ms(),
+            });
+            message.kind = "presence".into();
+            message.inside = Some(false);
+            message.place = "Université".into();
+            message.place_kind = "etudes".into();
+            let text = seal(&key, &message).unwrap();
+            let line = serde_json::json!({"id": "p1", "event": "message", "message": text});
+            let mut since = CATCH_UP.to_owned();
+            assert!(handle_line(&state, line.to_string().as_bytes(), &mut since).is_none());
+            // Une sortie ne fait pas sonner : pas d'arrivée.
+            assert!(state.arrivals.lock().list().is_empty());
+            let current = state.presence.lock().current(now_ms());
+            assert_eq!(current.len(), 1);
+            assert!(!current[0].inside);
+            assert_eq!(current[0].place, "Université");
+            std::fs::remove_dir_all(dir).unwrap();
+        }
+
+        #[test]
         fn received_news_is_returned_from_paired_devices_only() {
             let dir = crate::store::tests::temp_dir("push-news");
             let state = AppState::load(&dir, "PC").unwrap();
@@ -371,7 +431,7 @@ mod desktop {
 pub(crate) mod phone {
     use std::{sync::Arc, time::Duration};
 
-    use couple_core::{arrivals::RING_WITHIN_MS, Arrival};
+    use couple_core::{arrivals::RING_WITHIN_MS, Arrival, PresenceEvent};
     use couple_sync::Store;
     use tauri::AppHandle;
     use tauri_plugin_geofence::{GeofenceExt, PushConfig};
@@ -525,6 +585,15 @@ pub(crate) mod phone {
         let mut ids = Vec::new();
         for r in received {
             let id = r.id.clone();
+            let presence = PresenceEvent {
+                id: r.id.clone(),
+                who: r.who.clone(),
+                device: r.device.clone(),
+                at: r.at,
+                inside: r.inside,
+                place: r.place.clone(),
+                place_kind: r.place_kind.clone(),
+            };
             let arrival = Arrival {
                 id: r.id,
                 who: r.who,
@@ -532,7 +601,12 @@ pub(crate) mod phone {
                 at: r.at,
             };
             // Le téléphone a déjà sonné en recevant le message.
-            match super::accept(state, arrival, true) {
+            let result = if r.kind == "arrival" {
+                super::accept(state, arrival, true)
+            } else {
+                Ok(true)
+            };
+            match result.and_then(|ok| Ok(ok && super::accept_presence(state, &presence)?)) {
                 Ok(true) => ids.push(id),
                 // Gardée par Android : reprise quand l'appareil sera connu
                 // (au-delà de 15 min, elle sera simplement oubliée).

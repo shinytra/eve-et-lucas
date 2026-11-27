@@ -372,6 +372,9 @@ impl PushMessage {
             item: event.item.clone(),
             title: event.title.clone(),
             body: event.body.clone(),
+            place: String::new(),
+            place_kind: String::new(),
+            inside: None,
         }
     }
 

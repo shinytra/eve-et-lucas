@@ -223,6 +223,7 @@ pub fn run() {
             dates::update_date,
             dates::delete_date,
             arrivals::list_arrivals,
+            arrivals::list_presence,
             arrivals::arrival_person,
             arrivals::set_arrival_person,
             files::list_files,

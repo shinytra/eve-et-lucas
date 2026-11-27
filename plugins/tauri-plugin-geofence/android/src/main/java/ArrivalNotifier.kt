@@ -31,13 +31,19 @@ object ArrivalNotifier {
       "Arrivée à la maison",
       NotificationManager.IMPORTANCE_HIGH
     )
-    channel.description = "Prévient quand vous ou l'autre arrivez à la maison."
+    channel.description = "Prévient quand vous ou l'autre arrivez dans un lieu annoncé (maison…)."
     val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     manager.createNotificationChannel(channel)
   }
 
-  fun show(context: Context) {
-    notify(context, null, NOTIFICATION_ID, "Arrivée à la maison", "Bienvenue à la maison !")
+  /** Notre propre arrivée dans un lieu annoncé. */
+  fun show(context: Context, arrival: PendingArrival) {
+    val title = if (arrival.place.isEmpty()) {
+      "Arrivée à la maison"
+    } else {
+      "Arrivée : ${PlaceKinds.emoji(arrival.placeKind)} ${arrival.place}"
+    }
+    notify(context, null, NOTIFICATION_ID, title, "Bienvenue ! Les autres sont prévenus.")
   }
 
   /**
@@ -49,8 +55,12 @@ object ArrivalNotifier {
       context,
       arrival.id,
       RECEIVED_NOTIFICATION_ID,
-      "${arrival.who} arrive à la maison",
-      "Détecté par son téléphone à l'approche de la maison"
+      if (arrival.place.isEmpty()) {
+        "${arrival.who} arrive à la maison"
+      } else {
+        "${arrival.who} arrive · ${PlaceKinds.emoji(arrival.placeKind)} ${arrival.place}"
+      },
+      "Détecté par son téléphone en approchant"
     )
   }
 

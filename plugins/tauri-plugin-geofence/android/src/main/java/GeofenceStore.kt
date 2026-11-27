@@ -7,11 +7,48 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-/** Coordonnées de la maison enregistrées. */
-data class Home(val lat: Double, val lng: Double, val radiusM: Float)
+/**
+ * Un lieu enregistré sur ce téléphone (maison, université, travail…) :
+ * une zone de géorepérage. [announce] : y entrer fait sonner les autres.
+ */
+data class Place(
+  val id: String,
+  val name: String,
+  val kind: String,
+  val lat: Double,
+  val lng: Double,
+  val radiusM: Float,
+  val announce: Boolean
+)
 
-/** Une arrivée de ce téléphone, pas encore enregistrée par l'appli. */
-data class PendingArrival(val id: String, val at: Long)
+/** Types de lieux (les mêmes que `couple_core::presence::PLACE_KINDS`). */
+object PlaceKinds {
+  val ALL = listOf("maison", "etudes", "travail", "autre")
+
+  fun emoji(kind: String): String = when (kind) {
+    "maison", "" -> "🏠"
+    "etudes" -> "🎓"
+    "travail" -> "💼"
+    else -> "📍"
+  }
+}
+
+/**
+ * Un évènement de ce téléphone, pas encore enregistré par l'appli :
+ * `arrival` (entrée dans un lieu annoncé, les autres sonnent) ou `presence`
+ * (entrée ailleurs, ou sortie de tous les lieux : rien ne sonne).
+ */
+data class PendingArrival(
+  val id: String,
+  val at: Long,
+  val kind: String = KIND_ARRIVAL,
+  val inside: Boolean = true,
+  val place: String = "",
+  val placeKind: String = ""
+)
+
+const val KIND_ARRIVAL = "arrival"
+const val KIND_PRESENCE = "presence"
 
 /**
  * Réglages du réveil par ntfy, fournis par l'appli : clé commune (base64),
@@ -29,9 +66,9 @@ data class PushConfig(
 )
 
 /**
- * Préférences du plugin : la maison (pour la réenregistrer après un
- * redémarrage), l'option « sonner à l'arrivée », les arrivées pas encore
- * lues par l'appli, et pour le réveil par ntfy : la configuration d'envoi,
+ * Préférences du plugin : les lieux (pour les réenregistrer après un
+ * redémarrage) et ceux où se trouve le téléphone, l'option « sonner à
+ * l'arrivée », les arrivées et présences pas encore lues par l'appli, et pour le réveil par ntfy : la configuration d'envoi,
  * l'adresse UnifiedPush de ce téléphone, les arrivées reçues et celles qui
  * ont déjà sonné.
  *
@@ -41,6 +78,8 @@ data class PushConfig(
  */
 object GeofenceStore {
   private const val PREFS = "fr.eveetlucas.geofence"
+  private const val KEY_PLACES = "places"
+  private const val KEY_INSIDE = "inside_ids"
   private const val KEY_HAS_HOME = "has_home"
   private const val KEY_LAT = "lat_bits"
   private const val KEY_LNG = "lng_bits"
@@ -69,42 +108,122 @@ object GeofenceStore {
   /** Identifiants « déjà sonnés » gardés (les plus récents). */
   private const val MAX_RUNG = 50
 
+  /** Nombre maximal de lieux (Android en accepte 100 par appli). */
+  const val MAX_PLACES = 10
+
   /** Au-delà, les arrivées les plus anciennes sont oubliées. */
   private const val MAX_ARRIVALS = 100
 
   private fun prefs(context: Context): SharedPreferences =
     context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+  /**
+   * Lieux enregistrés. L'ancienne maison unique (avant les lieux nommés)
+   * devient le lieu « Maison », annoncé, sous le même identifiant que son
+   * ancienne géofence.
+   */
   @Synchronized
-  fun saveHome(context: Context, home: Home) {
-    prefs(context).edit()
-      .putBoolean(KEY_HAS_HOME, true)
-      // Pas de `putDouble` : on garde les 64 bits exacts dans un Long.
-      .putLong(KEY_LAT, home.lat.toRawBits())
-      .putLong(KEY_LNG, home.lng.toRawBits())
-      .putFloat(KEY_RADIUS, home.radiusM)
-      .commit()
-  }
-
-  @Synchronized
-  fun home(context: Context): Home? {
+  fun places(context: Context): List<Place> {
     val p = prefs(context)
-    if (!p.getBoolean(KEY_HAS_HOME, false)) return null
-    return Home(
-      Double.fromBits(p.getLong(KEY_LAT, 0L)),
-      Double.fromBits(p.getLong(KEY_LNG, 0L)),
-      p.getFloat(KEY_RADIUS, 0f)
-    )
+    if (!p.contains(KEY_PLACES) && p.getBoolean(KEY_HAS_HOME, false)) {
+      val home = Place(
+        id = GeofenceRegistrar.LEGACY_ID,
+        name = "Maison",
+        kind = "maison",
+        lat = Double.fromBits(p.getLong(KEY_LAT, 0L)),
+        lng = Double.fromBits(p.getLong(KEY_LNG, 0L)),
+        radiusM = p.getFloat(KEY_RADIUS, 0f),
+        announce = true
+      )
+      p.edit()
+        .putString(KEY_PLACES, placesJson(listOf(home)))
+        .remove(KEY_HAS_HOME)
+        .remove(KEY_LAT)
+        .remove(KEY_LNG)
+        .remove(KEY_RADIUS)
+        .commit()
+    }
+    return readPlaces(p)
   }
 
   @Synchronized
-  fun clearHome(context: Context) {
-    prefs(context).edit()
-      .remove(KEY_HAS_HOME)
-      .remove(KEY_LAT)
-      .remove(KEY_LNG)
-      .remove(KEY_RADIUS)
+  fun addPlace(context: Context, place: Place) {
+    val list = places(context).filter { it.id != place.id } + place
+    prefs(context).edit().putString(KEY_PLACES, placesJson(list)).commit()
+  }
+
+  /** Renomme un lieu ; `false` s'il n'existe pas. */
+  @Synchronized
+  fun renamePlace(context: Context, id: String, name: String): Boolean {
+    val list = places(context)
+    if (list.none { it.id == id }) return false
+    val renamed = list.map { if (it.id == id) it.copy(name = name) else it }
+    prefs(context).edit().putString(KEY_PLACES, placesJson(renamed)).commit()
+    return true
+  }
+
+  @Synchronized
+  fun removePlace(context: Context, id: String) {
+    val p = prefs(context)
+    val rest = places(context).filter { it.id != id }
+    val inside = readStrings(p, KEY_INSIDE).filter { it != id }
+    p.edit()
+      .putString(KEY_PLACES, placesJson(rest))
+      .putString(KEY_INSIDE, JSONArray(inside).toString())
       .commit()
+  }
+
+  /** Identifiants des lieux où se trouve le téléphone, le plus récent en dernier. */
+  @Synchronized
+  fun insideIds(context: Context): List<String> {
+    val known = places(context).map { it.id }.toSet()
+    return readStrings(prefs(context), KEY_INSIDE).filter { it in known }
+  }
+
+  private fun readPlaces(p: SharedPreferences): List<Place> {
+    val list = mutableListOf<Place>()
+    val raw = p.getString(KEY_PLACES, null) ?: return list
+    try {
+      val json = JSONArray(raw)
+      for (i in 0 until json.length()) {
+        val o = json.optJSONObject(i) ?: continue
+        val id = o.opt("id") as? String ?: continue
+        val name = o.opt("name") as? String ?: continue
+        val radius = o.optDouble("radiusM", 0.0)
+        if (id.isEmpty() || radius <= 0.0) continue
+        list.add(
+          Place(
+            id = id,
+            name = name,
+            kind = (o.opt("kind") as? String)?.takeIf { it in PlaceKinds.ALL } ?: "autre",
+            lat = o.optDouble("lat", 0.0),
+            lng = o.optDouble("lng", 0.0),
+            radiusM = radius.toFloat(),
+            announce = o.optBoolean("announce", false)
+          )
+        )
+      }
+    } catch (e: Exception) {
+      Log.w(TAG, "Liste des lieux illisible, ignorée", e)
+    }
+    return list
+  }
+
+  private fun placesJson(places: List<Place>): String {
+    val json = JSONArray()
+    for (pl in places) {
+      json.put(
+        JSONObject()
+          .put("id", pl.id)
+          .put("name", pl.name)
+          .put("kind", pl.kind)
+          .put("lat", pl.lat)
+          .put("lng", pl.lng)
+          .put("radiusM", pl.radiusM.toDouble())
+          .put("announce", pl.announce)
+      )
+    }
+    return json.toString()
   }
 
   @Synchronized
@@ -116,28 +235,72 @@ object GeofenceStore {
   fun ringOnArrival(context: Context): Boolean = prefs(context).getBoolean(KEY_RING, false)
 
   /**
-   * Note une entrée dans la zone, sauf si la précédente arrivée de ce
-   * téléphone date de moins de 5 minutes (même anti-rebond que le cœur).
-   * L'identifiant est créé ici, pour que l'arrivée envoyée par ntfy et celle
-   * que l'appli enregistrera plus tard dans le document partagé soient la même.
+   * Note des entrées ([entered]) et des sorties ([exited]) de lieux, et
+   * renvoie l'évènement à annoncer si le lieu actuel (le dernier où l'on est
+   * entré et qu'on n'a pas quitté) change, sinon `null`.
    *
-   * @return l'arrivée notée, ou `null` si elle est ignorée.
+   * Passer d'« ailleurs » à un lieu annoncé est une arrivée (les autres
+   * sonnent), sauf si [allowArrival] est faux (lieu tout juste ajouté) ou
+   * moins de 5 minutes après la précédente arrivée (même anti-rebond que le
+   * cœur) ; tout autre changement est une simple présence. L'identifiant est
+   * créé ici, pour que l'évènement envoyé par ntfy et celui que l'appli
+   * enregistrera plus tard dans le document partagé soient le même.
    */
   @Synchronized
-  fun recordArrival(context: Context, at: Long): PendingArrival? {
+  fun recordTransition(
+    context: Context,
+    at: Long,
+    entered: List<String>,
+    exited: List<String>,
+    allowArrival: Boolean
+  ): PendingArrival? {
     val p = prefs(context)
+    val byId = places(context).associateBy { it.id }
+    val inside = readStrings(p, KEY_INSIDE).filter { it in byId }.toMutableList()
+    val before = inside.lastOrNull()
+    for (id in exited) inside.remove(id)
+    for (id in entered) {
+      if (id !in byId) continue
+      inside.remove(id)
+      inside.add(id)
+    }
+    val after = inside.lastOrNull()
+    val edit = p.edit().putString(KEY_INSIDE, JSONArray(inside).toString())
+    if (before == after) {
+      edit.commit()
+      return null
+    }
     val arrivals = readArrivals(p)
-    var last = p.getLong(KEY_LAST_ARRIVAL, Long.MIN_VALUE)
-    for (a in arrivals) if (a.at > last) last = a.at
-    if (last != Long.MIN_VALUE && at >= last && at - last < DEBOUNCE_MS) return null
-    val arrival = PendingArrival(UUID.randomUUID().toString(), at)
-    arrivals.add(arrival)
+    val event = if (after != null) {
+      val place = byId.getValue(after)
+      var last = p.getLong(KEY_LAST_ARRIVAL, Long.MIN_VALUE)
+      for (a in arrivals) if (a.kind == KIND_ARRIVAL && a.at > last) last = a.at
+      val bounce = last != Long.MIN_VALUE && at >= last && at - last < DEBOUNCE_MS
+      val arrival = allowArrival && before == null && place.announce && !bounce
+      if (arrival) edit.putLong(KEY_LAST_ARRIVAL, at)
+      PendingArrival(
+        UUID.randomUUID().toString(),
+        at,
+        if (arrival) KIND_ARRIVAL else KIND_PRESENCE,
+        true,
+        place.name,
+        place.kind
+      )
+    } else {
+      val left = byId[before]
+      PendingArrival(
+        UUID.randomUUID().toString(),
+        at,
+        KIND_PRESENCE,
+        false,
+        left?.name.orEmpty(),
+        left?.kind.orEmpty()
+      )
+    }
+    arrivals.add(event)
     while (arrivals.size > MAX_ARRIVALS) arrivals.removeAt(0)
-    p.edit()
-      .putString(KEY_ARRIVALS, arrivalsJson(arrivals))
-      .putLong(KEY_LAST_ARRIVAL, at)
-      .commit()
-    return arrival
+    edit.putString(KEY_ARRIVALS, arrivalsJson(arrivals)).commit()
+    return event
   }
 
   /** Renvoie les arrivées enregistrées, sans les effacer. */
@@ -172,7 +335,18 @@ object GeofenceStore {
         if (item is JSONObject) {
           val id = item.opt("id") as? String
           val at = item.optLong("at", -1L)
-          if (id != null && id.isNotEmpty() && at >= 0L) list.add(PendingArrival(id, at))
+          if (id != null && id.isNotEmpty() && at >= 0L) {
+            list.add(
+              PendingArrival(
+                id,
+                at,
+                if (item.opt("kind") == KIND_PRESENCE) KIND_PRESENCE else KIND_ARRIVAL,
+                item.optBoolean("inside", true),
+                item.opt("place") as? String ?: "",
+                item.opt("placeKind") as? String ?: ""
+              )
+            )
+          }
         } else if (item is Number) {
           val at = item.toLong()
           if (at >= 0L) list.add(PendingArrival(UUID.randomUUID().toString(), at))
@@ -188,8 +362,18 @@ object GeofenceStore {
 
   private fun arrivalsJson(arrivals: List<PendingArrival>): String {
     val json = JSONArray()
-    for (a in arrivals) json.put(JSONObject().put("id", a.id).put("at", a.at))
+    for (a in arrivals) json.put(pendingJson(a))
     return json.toString()
+  }
+
+  fun pendingJson(a: PendingArrival): JSONObject =
+    JSONObject()
+      .put("id", a.id)
+      .put("at", a.at)
+      .put("kind", a.kind)
+      .put("inside", a.inside)
+      .put("place", a.place)
+      .put("placeKind", a.placeKind)
   }
 
   // --- Réveil par ntfy ---------------------------------------------------
@@ -286,13 +470,14 @@ object GeofenceStore {
 
   /** Arrivées des autres reçues par ntfy, en attendant que l'appli les lise. */
   @Synchronized
-  fun addReceived(context: Context, arrival: ArrivalMessage) {
+  fun addReceived(context: Context, arrival: ArrivalMessage): Boolean {
     val p = prefs(context)
     val list = readReceived(p)
-    if (list.any { it.id == arrival.id }) return
+    if (list.any { it.id == arrival.id }) return false
     list.add(arrival)
     while (list.size > MAX_ARRIVALS) list.removeAt(0)
     p.edit().putString(KEY_RECEIVED, receivedJson(list)).commit()
+    return true
   }
 
   @Synchronized
@@ -316,7 +501,20 @@ object GeofenceStore {
         val who = o.opt("who") as? String ?: continue
         val device = o.opt("device") as? String ?: continue
         val at = o.optLong("at", -1L)
-        if (at >= 0L) list.add(ArrivalMessage(id, who, device, at))
+        if (at >= 0L) {
+          list.add(
+            ArrivalMessage(
+              id,
+              who,
+              device,
+              at,
+              if (o.opt("kind") == KIND_PRESENCE) KIND_PRESENCE else KIND_ARRIVAL,
+              o.optBoolean("inside", true),
+              o.opt("place") as? String ?: "",
+              o.opt("placeKind") as? String ?: ""
+            )
+          )
+        }
       }
     } catch (e: Exception) {
       Log.w(TAG, "Liste des arrivées reçues illisible, ignorée", e)
@@ -328,7 +526,15 @@ object GeofenceStore {
     val json = JSONArray()
     for (a in list) {
       json.put(
-        JSONObject().put("id", a.id).put("who", a.who).put("device", a.device).put("at", a.at)
+        JSONObject()
+          .put("id", a.id)
+          .put("who", a.who)
+          .put("device", a.device)
+          .put("at", a.at)
+          .put("kind", a.kind)
+          .put("inside", a.inside)
+          .put("place", a.place)
+          .put("placeKind", a.placeKind)
       )
     }
     return json.toString()

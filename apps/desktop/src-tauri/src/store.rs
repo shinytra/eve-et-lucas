@@ -8,8 +8,8 @@ use std::{
 };
 
 use couple_core::{
-    AnimesDoc, ArrivalsDoc, DatesDoc, DevicesDoc, FilesDoc, MusicDoc, NotesDoc, PushDoc, SyncState,
-    Syncable, TasksDoc,
+    AnimesDoc, ArrivalsDoc, DatesDoc, DevicesDoc, FilesDoc, MusicDoc, NotesDoc, PresenceDoc,
+    PushDoc, SyncState, Syncable, TasksDoc,
 };
 use couple_sync::{
     iroh::{EndpointId, SecretKey},
@@ -59,6 +59,15 @@ impl Persist for FilesDoc {
     }
     fn save(&mut self) -> Vec<u8> {
         FilesDoc::save(self)
+    }
+}
+
+impl Persist for PresenceDoc {
+    fn load(bytes: &[u8]) -> couple_core::Result<Self> {
+        PresenceDoc::load(bytes)
+    }
+    fn save(&mut self) -> Vec<u8> {
+        PresenceDoc::save(self)
     }
 }
 
@@ -221,6 +230,7 @@ pub const TASKS_DOC: &str = "tasks";
 pub const DATES_DOC: &str = "dates";
 pub const FILES_DOC: &str = "files";
 pub const ARRIVALS_DOC: &str = "arrivals";
+pub const PRESENCE_DOC: &str = "presence";
 pub const PUSH_DOC: &str = "push";
 pub const DEVICES_DOC: &str = "devices";
 pub const ANIMES_DOC: &str = "animes";
@@ -235,6 +245,8 @@ pub struct AppState {
     pub dates: Persisted<DatesDoc>,
     pub files: Persisted<FilesDoc>,
     pub arrivals: Persisted<ArrivalsDoc>,
+    /// Où est chacun (lieux enregistrés sur les téléphones).
+    pub presence: Persisted<PresenceDoc>,
     /// Clé et adresses du réveil par ntfy.
     pub push: Persisted<PushDoc>,
     /// Animés regardés ensemble.
@@ -287,6 +299,7 @@ impl AppState {
         let dates = Persisted::load(data_dir.join("dates.automerge"), &mut startup_warnings)?;
         let files = Persisted::load(data_dir.join("files.automerge"), &mut startup_warnings)?;
         let arrivals = Persisted::load(data_dir.join("arrivals.automerge"), &mut startup_warnings)?;
+        let presence = Persisted::load(data_dir.join("presence.automerge"), &mut startup_warnings)?;
         let push = Persisted::load(data_dir.join("push.automerge"), &mut startup_warnings)?;
         let animes = Persisted::load(data_dir.join("animes.automerge"), &mut startup_warnings)?;
         let music = Persisted::load(data_dir.join("musiques.automerge"), &mut startup_warnings)?;
@@ -299,6 +312,7 @@ impl AppState {
             dates,
             files,
             arrivals,
+            presence,
             push,
             animes,
             music,
@@ -375,6 +389,9 @@ impl AppState {
             ARRIVALS_DOC => self.arrivals.change("de synchroniser les arrivées", |d| {
                 d.receive_sync_message(state, message)
             }),
+            PRESENCE_DOC => self.presence.change("de synchroniser les présences", |d| {
+                d.receive_sync_message(state, message)
+            }),
             PUSH_DOC => self.push.change("de synchroniser le réveil", |d| {
                 d.receive_sync_message(state, message)
             }),
@@ -398,6 +415,7 @@ impl AppState {
             DATES_DOC => Ok(f(&mut *self.dates.lock())),
             FILES_DOC => Ok(f(&mut *self.files.lock())),
             ARRIVALS_DOC => Ok(f(&mut *self.arrivals.lock())),
+            PRESENCE_DOC => Ok(f(&mut *self.presence.lock())),
             PUSH_DOC => Ok(f(&mut *self.push.lock())),
             ANIMES_DOC => Ok(f(&mut *self.animes.lock())),
             MUSIC_DOC => Ok(f(&mut *self.music.lock())),
@@ -416,6 +434,7 @@ impl Store for AppState {
             TASKS_DOC.into(),
             FILES_DOC.into(),
             ARRIVALS_DOC.into(),
+            PRESENCE_DOC.into(),
             PUSH_DOC.into(),
             ANIMES_DOC.into(),
             DATES_DOC.into(),
@@ -498,6 +517,9 @@ impl Store for AppState {
         }
         if docs.iter().any(|d| d == ARRIVALS_DOC) {
             self.arrivals_wanted.notify_one();
+            self.widget_wanted.notify_one();
+        }
+        if docs.iter().any(|d| d == PRESENCE_DOC) {
             self.widget_wanted.notify_one();
         }
         if docs.iter().any(|d| d == FILES_DOC) {

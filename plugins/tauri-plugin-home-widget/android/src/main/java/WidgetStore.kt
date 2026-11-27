@@ -56,6 +56,10 @@ object WidgetStore {
   private const val PREFS = "fr.eveetlucas.homewidget"
   private const val KEY_DATA = "data"
   private const val KEY_ACTIONS = "actions"
+  private const val KEY_PRESENCE = "presence_received"
+
+  /** Personnes dont on garde la présence reçue par ntfy. */
+  private const val MAX_PRESENCE = 8
 
   /** Au-delà, les actions les plus anciennes sont oubliées. */
   private const val MAX_ACTIONS = 200
@@ -71,6 +75,35 @@ object WidgetStore {
   /** Données affichées, telles que reçues (peut-être illisibles), ou `null`. */
   @Synchronized
   fun data(context: Context): String? = prefs(context).getString(KEY_DATA, null)
+
+  /**
+   * Présence d'un autre reçue par ntfy, appli fermée : affichée jusqu'à ce
+   * que l'appli envoie plus récent. Une plus ancienne que celle gardée est
+   * ignorée.
+   */
+  @Synchronized
+  fun savePresence(context: Context, presence: Presence) {
+    val map = receivedPresence(context).associateBy { it.who.lowercase() }.toMutableMap()
+    val key = presence.who.lowercase()
+    val known = map[key]
+    if (known != null && known.at >= presence.at) return
+    map[key] = presence
+    val json = JSONArray()
+    for (p in map.values.sortedByDescending { it.at }.take(MAX_PRESENCE)) json.put(p.toJson())
+    prefs(context).edit().putString(KEY_PRESENCE, json.toString()).commit()
+  }
+
+  @Synchronized
+  fun receivedPresence(context: Context): List<Presence> {
+    val raw = prefs(context).getString(KEY_PRESENCE, null) ?: return emptyList()
+    return try {
+      val json = JSONArray(raw)
+      (0 until json.length()).mapNotNull { Presence.fromJson(json.optJSONObject(it)) }
+    } catch (e: Exception) {
+      Log.w(TAG, "Présences reçues illisibles, ignorées", e)
+      emptyList()
+    }
+  }
 
   /**
    * Note que la tâche `taskId` a été cochée et la retire tout de suite des

@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Arrival, Day, Error, Result, Task, TasksDoc, UpcomingDate};
+use crate::{Arrival, Day, Error, PresenceEvent, Result, Task, TasksDoc, UpcomingDate};
 
 /// Nombre maximal de tâches affichées sur le widget.
 pub const MAX_TASKS: usize = 8;
@@ -38,6 +38,20 @@ pub struct WidgetArrival {
     pub at: i64,
 }
 
+/// Où est une personne (voir [`crate::presence`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WidgetPresence {
+    pub who: String,
+    /// Dans l'un de ses lieux ; sinon ailleurs.
+    pub inside: bool,
+    /// Nom du lieu (vide : la maison, pour une ancienne arrivée).
+    pub place: String,
+    pub place_kind: String,
+    /// Moment de l'entrée ou de la sortie.
+    pub at: i64,
+}
+
 /// Une date importante à venir. Le widget compte lui-même les jours restants
 /// à partir de `day` : le compte reste juste après minuit, appli fermée.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,6 +74,10 @@ pub struct WidgetData {
     /// Nombre total de tâches à faire (pour « et 3 autres »).
     pub open_count: usize,
     pub last_arrival: Option<WidgetArrival>,
+    /// Où sont les autres (pas la personne qui porte ce téléphone), triés
+    /// par prénom.
+    #[serde(default)]
+    pub presence: Vec<WidgetPresence>,
     /// Prochaines dates importantes, la plus proche en premier (au plus
     /// [`MAX_DATES`]). Le widget affiche la première qui n'est pas passée.
     pub next_dates: Vec<WidgetDate>,
@@ -69,13 +87,19 @@ pub struct WidgetData {
 
 /// Calcule le contenu du widget. `tasks` dans l'ordre de [`TasksDoc::list`],
 /// `arrivals` dans l'ordre de [`crate::ArrivalsDoc::list`], `dates` dans
-/// celui de [`crate::DatesDoc::upcoming`] (la plus proche en premier).
+/// celui de [`crate::DatesDoc::upcoming`] (la plus proche en premier),
+/// `presence` celui de [`crate::PresenceDoc::current`]. `me` : prénom de la
+/// personne qui porte ce téléphone (vide s'il n'est pas choisi), dont la
+/// présence n'est pas affichée.
 pub fn snapshot(
     tasks: &[Task],
     arrivals: &[Arrival],
     dates: &[UpcomingDate],
+    presence: &[PresenceEvent],
+    me: &str,
     now_ms: i64,
 ) -> WidgetData {
+    let me = me.trim();
     let open: Vec<&Task> = tasks.iter().filter(|t| !t.done).collect();
     WidgetData {
         tasks: open
@@ -98,6 +122,17 @@ pub fn snapshot(
                 who: a.who.clone(),
                 at: a.at,
             }),
+        presence: presence
+            .iter()
+            .filter(|p| me.is_empty() || !p.who.trim().eq_ignore_ascii_case(me))
+            .map(|p| WidgetPresence {
+                who: p.who.clone(),
+                inside: p.inside,
+                place: p.place.clone(),
+                place_kind: p.place_kind.clone(),
+                at: p.at,
+            })
+            .collect(),
         next_dates: dates
             .iter()
             .filter_map(|u| {
@@ -171,7 +206,7 @@ mod tests {
         arrivals.add("Eve", "tel-eve", now - 13 * 60 * MIN).unwrap();
         arrivals.add("Lucas", "tel-lucas", now - 30 * MIN).unwrap();
 
-        let data = snapshot(&tasks.list(), &arrivals.list(), &[], now);
+        let data = snapshot(&tasks.list(), &arrivals.list(), &[], &[], "", now);
         assert_eq!(data.open_count, 12);
         assert_eq!(data.tasks.len(), MAX_TASKS);
         assert_eq!(data.tasks[0].id, late.id);
@@ -188,7 +223,7 @@ mod tests {
         );
 
         // Arrivée trop ancienne : plus affichée.
-        let data = snapshot(&[], &arrivals.list(), &[], now + 13 * 60 * MIN);
+        let data = snapshot(&[], &arrivals.list(), &[], &[], "", now + 13 * 60 * MIN);
         assert_eq!(data.last_arrival, None);
         assert!(data.next_dates.is_empty());
     }
@@ -246,7 +281,7 @@ mod tests {
                 .unwrap();
         }
         let today = Day::new(2026, 11, 26).unwrap();
-        let data = snapshot(&[], &[], &dates.upcoming(today), 0);
+        let data = snapshot(&[], &[], &dates.upcoming(today), &[], "", 0);
         // La date unique passée (vacances) n'est jamais envoyée.
         assert_eq!(data.next_dates.len(), MAX_DATES);
         assert_eq!(
@@ -263,7 +298,7 @@ mod tests {
 
         // Le jour même, elle reste la première.
         let today = Day::new(2027, 6, 12).unwrap();
-        let data = snapshot(&[], &[], &dates.upcoming(today), 0);
+        let data = snapshot(&[], &[], &dates.upcoming(today), &[], "", 0);
         assert_eq!(data.next_dates[0].title, "Nous");
 
         // Plus aucune date à venir.
@@ -274,7 +309,7 @@ mod tests {
             0,
         )
         .unwrap();
-        let data = snapshot(&[], &[], &past.upcoming(today), 0);
+        let data = snapshot(&[], &[], &past.upcoming(today), &[], "", 0);
         assert!(data.next_dates.is_empty());
     }
 
@@ -299,13 +334,52 @@ mod tests {
         phone.merge(&mut pc).unwrap();
         pc.merge(&mut phone).unwrap();
         let today = Day::new(2026, 11, 26).unwrap();
-        let data = snapshot(&[], &[], &phone.upcoming(today), 0);
-        assert_eq!(data, snapshot(&[], &[], &pc.upcoming(today), 0));
+        let data = snapshot(&[], &[], &phone.upcoming(today), &[], "", 0);
+        assert_eq!(data, snapshot(&[], &[], &pc.upcoming(today), &[], "", 0));
         let next = &data.next_dates[0];
         assert_eq!((next.title.as_str(), next.emoji.as_str()), ("Eve", "🎂"));
         assert_eq!(next.day, Day::new(2026, 12, 3).unwrap());
         assert_eq!(next.years, Some(26));
         assert_eq!(data.next_dates[1].day, Day::new(2027, 1, 20).unwrap());
+    }
+
+    #[test]
+    fn snapshot_shows_where_the_others_are() {
+        let mut presence = crate::PresenceDoc::new();
+        let mut tel_eve = presence.fork();
+        let ev = |id: &str, who: &str, at, inside, place: &str, kind: &str| PresenceEvent {
+            id: id.into(),
+            who: who.into(),
+            device: "d".into(),
+            at,
+            inside,
+            place: place.into(),
+            place_kind: kind.into(),
+        };
+        tel_eve
+            .record(&ev("1", "Eve", 10 * MIN, true, "Université", "etudes"))
+            .unwrap();
+        presence
+            .record(&ev("2", "Lucas", 20 * MIN, false, "Maison", "maison"))
+            .unwrap();
+        presence.merge(&mut tel_eve).unwrap();
+        let current = presence.current(30 * MIN);
+        // Sur le téléphone de Lucas : seulement Eve.
+        let data = snapshot(&[], &[], &[], &current, "lucas", 30 * MIN);
+        assert_eq!(
+            data.presence,
+            vec![WidgetPresence {
+                who: "Eve".into(),
+                inside: true,
+                place: "Université".into(),
+                place_kind: "etudes".into(),
+                at: 10 * MIN,
+            }]
+        );
+        // Prénom pas encore choisi : tout le monde.
+        assert_eq!(snapshot(&[], &[], &[], &current, "", 0).presence.len(), 2);
+        let json = serde_json::to_string(&data).unwrap();
+        assert!(json.contains(r#""placeKind":"etudes""#), "{json}");
     }
 
     #[test]

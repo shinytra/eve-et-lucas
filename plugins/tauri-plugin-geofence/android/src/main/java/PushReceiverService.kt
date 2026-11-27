@@ -22,6 +22,9 @@ class PushReceiverService : PushService() {
   companion object {
     /** Une arrivée plus ancienne (ou annoncée dans le futur) ne sonne plus. */
     const val RING_WITHIN_MS = 15 * 60 * 1000L
+
+    /** Une présence plus ancienne arrivera de toute façon par la synchro. */
+    const val PRESENCE_WITHIN_MS = 12 * 60 * 60 * 1000L
   }
 
   override fun onNewEndpoint(endpoint: PushEndpoint, instance: String) {
@@ -106,8 +109,17 @@ class PushReceiverService : PushService() {
       return
     }
     // Relue ici : la configuration peut avoir changé depuis la clé.
-    if (arrival.device == GeofenceStore.pushConfig(this).device) {
+    val config = GeofenceStore.pushConfig(this)
+    if (arrival.device == config.device) {
       Log.w(TAG, "Message ntfy ignoré : c'est notre propre arrivée")
+      return
+    }
+    if (config.devices.isNotEmpty() && arrival.device !in config.devices) {
+      Log.w(TAG, "Message ntfy ignoré : appareil qui n'est plus appairé")
+      return
+    }
+    if (arrival.kind == KIND_PRESENCE) {
+      handlePresence(arrival)
       return
     }
     val age = System.currentTimeMillis() - arrival.at
@@ -122,6 +134,22 @@ class PushReceiverService : PushService() {
     // D'abord enregistrer (pour `peek_received`), puis prévenir.
     GeofenceStore.addReceived(this, arrival)
     ArrivalNotifier.showReceived(this, arrival)
+    PresenceAnnouncer.toWidget(this, arrival)
     GeofencePlugin.notifyReceived(arrival)
+  }
+
+  /**
+   * Changement de lieu de l'autre (entrée dans un lieu non annoncé, sortie) :
+   * rien ne sonne, l'appli et le widget sont mis à jour.
+   */
+  private fun handlePresence(presence: ArrivalMessage) {
+    val age = System.currentTimeMillis() - presence.at
+    if (age > PRESENCE_WITHIN_MS || age < -RING_WITHIN_MS) {
+      Log.w(TAG, "Présence ignorée : trop ancienne (ou horloge décalée)")
+      return
+    }
+    if (!GeofenceStore.addReceived(this, presence)) return
+    PresenceAnnouncer.toWidget(this, presence)
+    GeofencePlugin.notifyReceived(presence)
   }
 }
