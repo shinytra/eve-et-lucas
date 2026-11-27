@@ -90,7 +90,7 @@ Plutôt que de réécrire, s'inspirer de (ou dépendre de) :
 1. ✅ Base Tauri 2 + notes partagées en local.
 2. a. ✅ Appli PC en tâche de fond : icône dans la barre des tâches, fermer la fenêtre la cache, lancement au démarrage (option du menu de l'icône, démarre fenêtre cachée), une seule instance.
    b. ✅ Synchro iroh entre appareils + appairage par QR code (écran « Appareils »).
-3. ✅ Appli Android avec la même base (APK construit par la CI, scan du QR code d'appairage ; reste à essayer sur vos téléphones).
+3. ✅ Appli Android avec la même base (APK construit par la CI ; appairage par code copié-collé : le scan du QR code dans l'appli plantait sur téléphone, retiré à la demande de Lucas).
 4. ✅ Tâches communes et rappels (notifications).
 5. ✅ Partage de fichiers P2P (iroh-blobs).
 6. ✅ Sonnerie à l'arrivée (géofencing, plugin Kotlin ; reste à essayer sur vos téléphones).

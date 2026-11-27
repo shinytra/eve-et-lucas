@@ -111,32 +111,6 @@
     await refreshDevices();
   });
 
-  // Sur téléphone : scanner le QR code affiché par le PC.
-  if (/Android|iPhone|iPad/i.test(navigator.userAgent)) {
-    const scan = $("join-scan");
-    scan.hidden = false;
-    scan.addEventListener("click", async () => {
-      showError(null);
-      try {
-        let permission = await invoke("plugin:barcode-scanner|check_permissions");
-        if (permission?.camera !== "granted") {
-          permission = await invoke("plugin:barcode-scanner|request_permissions");
-        }
-        if (permission?.camera !== "granted") {
-          showError("L'appareil photo est nécessaire pour scanner le QR code. Tu peux aussi coller le code.");
-          return;
-        }
-        const result = await invoke("plugin:barcode-scanner|scan", { windowed: false, formats: ["QR_CODE"] });
-        if (result?.content) {
-          $("join-code").value = result.content;
-          $("join-form").requestSubmit();
-        }
-      } catch (e) {
-        showError(`Scan impossible : ${e}`);
-      }
-    });
-  }
-
   $("rename-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     showError(null);
