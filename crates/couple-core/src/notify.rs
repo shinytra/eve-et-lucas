@@ -14,8 +14,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    animes::Anime, dates::ImportantDate, files::SharedFile, notes::Note, push::PushMessage,
-    tasks::Task, Error, Result,
+    animes::Anime, dates::ImportantDate, files::SharedFile, music::Music, notes::Note,
+    push::PushMessage, tasks::Task, Error, Result,
 };
 
 /// Nouvelle note.
@@ -30,6 +30,8 @@ pub const DATE: &str = "date";
 pub const ANIME: &str = "anime";
 /// Nouveau fichier partagé.
 pub const FILE: &str = "fichier";
+/// Musique recommandée.
+pub const MUSIC: &str = "musique";
 
 /// Un type de notification, pour l'écran des réglages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -40,7 +42,7 @@ pub struct NotifyKind {
 }
 
 /// Tous les types, dans l'ordre de l'écran des réglages.
-pub const KINDS: [NotifyKind; 6] = [
+pub const KINDS: [NotifyKind; 7] = [
     NotifyKind {
         code: NOTE,
         label: "Nouvelles notes",
@@ -70,6 +72,11 @@ pub const KINDS: [NotifyKind; 6] = [
         code: FILE,
         label: "Fichiers partagés",
         description: "Quand l'autre partage un fichier.",
+    },
+    NotifyKind {
+        code: MUSIC,
+        label: "Musiques",
+        description: "Quand l'autre te recommande une musique.",
     },
 ];
 
@@ -308,6 +315,26 @@ impl Event {
         )
     }
 
+    pub fn music_added(music: &Music, device: &str, at: i64) -> Self {
+        let mut body = match (music.title.as_str(), music.artist.as_str()) {
+            ("", _) => "Un morceau YouTube Music".to_owned(),
+            (title, "") => title.to_owned(),
+            (title, artist) => format!("{title} · {artist}"),
+        };
+        if !music.message.is_empty() {
+            body = format!("{body} : « {} »", music.message);
+        }
+        Self::new(
+            MUSIC,
+            &music.added_by,
+            device,
+            at,
+            &music.id,
+            format!("{} te recommande une musique", music.added_by.trim()),
+            &body,
+        )
+    }
+
     /// Faut-il l'afficher ici ? Pas si ce type est coupé, si elle vient de
     /// cet appareil ou de la personne qui le porte (`owner`, téléphone
     /// seulement), ni si elle est trop vieille ou datée dans le futur.
@@ -535,6 +562,18 @@ mod tests {
             assert!(is_kind(&e.kind));
             assert_eq!(e.item, task.id);
         }
+        let mut music = crate::MusicDoc::new();
+        let link = crate::music::parse_link("https://youtu.be/dQw4w9WgXcQ").unwrap();
+        let m = music.add("Eve", &link, "Titre", "Artiste", "", 1).unwrap();
+        let e = Event::music_added(&m, "d", 1);
+        assert_eq!(e.kind, MUSIC);
+        assert_eq!(e.title, "Eve te recommande une musique");
+        assert_eq!(e.body, "Titre · Artiste");
+        let m = music.update(&m.id, "", "", "écoute le refrain", 2).unwrap();
+        assert_eq!(
+            Event::music_added(&m, "d", 1).body,
+            "Un morceau YouTube Music : « écoute le refrain »"
+        );
         // Deux annonces : deux identifiants, même élément.
         let a = Event::task_done(&task, "Eve", "d", 1);
         let b = Event::task_done(&task, "Eve", "d", 1);

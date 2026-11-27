@@ -104,7 +104,7 @@ data class EventMessage(
  */
 object EventPayload {
   /** Les types de `couple_core::notify::KINDS`. */
-  val KINDS = setOf("note", "tache", "tache-faite", "date", "anime", "fichier")
+  val KINDS = setOf("note", "tache", "tache-faite", "date", "anime", "fichier", "musique")
   const val SHOW_WITHIN_MS = 12 * 60 * 60 * 1000L
   const val CLOCK_SKEW_MS = 60_000L
   private const val MAX_TEXT = 120
