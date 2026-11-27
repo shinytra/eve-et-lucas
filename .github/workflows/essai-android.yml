@@ -17,6 +17,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: essai-android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   scan:
     runs-on: ubuntu-latest
@@ -71,11 +75,19 @@ jobs:
           echo no | "$sdk/avdmanager" create avd -n essai -k "$image" -d pixel_6 --force
           "$ANDROID_HOME/emulator/emulator" -avd essai -no-window -no-audio -no-boot-anim \
             -gpu swiftshader_indirect -camera-back emulated -no-snapshot > "$RUNNER_TEMP/emulateur.log" 2>&1 &
-          adb wait-for-device
-          for i in $(seq 1 90); do
-            if [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; then break; fi
+          demarre=
+          for i in $(seq 1 60); do
+            if [ "$(timeout 10 adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; then
+              demarre=1
+              break
+            fi
             sleep 5
           done
+          if [ -z "$demarre" ]; then
+            echo "::error::L'émulateur n'a pas démarré en 5 minutes."
+            tail -n 80 "$RUNNER_TEMP/emulateur.log"
+            exit 1
+          fi
           adb shell settings put global window_animation_scale 0
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
