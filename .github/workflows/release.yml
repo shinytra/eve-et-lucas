@@ -64,6 +64,11 @@ jobs:
       - name: Générer le projet Android
         working-directory: apps/desktop/src-tauri
         run: NDK_HOME="$ANDROID_NDK_LATEST_HOME" npm run tauri -- android init --ci
+      # Icône de l'appli (icône adaptative + toutes densités), préparée dans
+      # icons/android par icons/source/generer.py : gen/android est régénéré.
+      - name: Poser l'icône de l'appli
+        working-directory: apps/desktop/src-tauri
+        run: cp -r icons/android/. gen/android/app/src/main/res/
       # Version « release » : code Rust optimisé et sans symboles de débogage
       # (quelques dizaines de Mo au lieu de plusieurs centaines pour --debug).
       # Gradle la produit non signée ; elle est signée à l'étape suivante.
