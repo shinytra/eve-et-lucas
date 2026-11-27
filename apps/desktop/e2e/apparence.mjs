@@ -153,6 +153,28 @@ await sleep(800);
 check("l'image de fond est affichée", (await js("(() => document.documentElement.hasAttribute('data-image') && document.documentElement.dataset.fond)()")) === "image");
 check("le type de fond « image » est enregistré", (await ipcJson("get_appearance"))?.current?.wallpaper === "image");
 await shot("fond-image");
+
+// Couleurs tirées de l'image (option « Couleurs de l'appli d'après l'image »).
+const before = (await ipcJson("get_appearance"))?.current;
+const switchSel = '[data-panel="fond"] .interrupteur input';
+check("l'option des couleurs de l'image est proposée", (await js(`(() => !document.querySelector('${switchSel}').closest('.reglage').hidden)()`)) === "true");
+await call("webview_interact", { action: "click", selector: switchSel });
+await sleep(1200);
+const adapted = (await ipcJson("get_appearance"))?.current;
+check("l'option est enregistrée", adapted?.image_colors === true);
+check("les couleurs viennent de l'image", adapted?.accent !== before?.accent && adapted?.wallpaper_colors?.join() !== before?.wallpaper_colors?.join());
+check("les couleurs sont appliquées à l'écran", (await cssVar("--accent")) === adapted?.accent);
+check("le voile de l'image suit la teinte du verre", (await cssVar("--voile")).startsWith("rgba("));
+await shot("fond-image-couleurs");
+// Choisir une couleur à la main arrête l'option.
+await call("webview_interact", { action: "click", selector: '[data-tab="couleurs"]' });
+await sleep(200);
+check("l'onglet Couleurs signale l'option", (await js(`(() => [...document.querySelectorAll('[data-panel="couleurs"] .aide')].some(p => !p.hidden))()`)) === "true");
+await js(`(() => { document.querySelector('[data-panel="couleurs"] .couleurs button').click(); return true })()`);
+await sleep(800);
+check("une couleur choisie à la main arrête l'option", (await ipcJson("get_appearance"))?.current?.image_colors === false);
+await call("webview_interact", { action: "click", selector: '[data-tab="fond"]' });
+await sleep(200);
 await js(`(() => { [...document.querySelectorAll('[data-panel="fond"] button')].find(b => b.textContent.includes("Retirer l'image")).click(); return true })()`);
 await sleep(800);
 check("l'image de fond est retirée", (await js("(() => document.documentElement.hasAttribute('data-image'))()")) === "false");

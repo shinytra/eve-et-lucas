@@ -32,6 +32,8 @@
   --wall-blur: 0px;
   --wall-dim: 0;
   --grain: 0;
+  --voile: rgba(255, 255, 255, 0.4);
+  --lisere: rgba(255, 255, 255, 0.35);
   color-scheme: light;
   font-family: var(--font);
   color: var(--text);
@@ -265,6 +267,25 @@ body {
 .fond-voile {
   inset: 0;
   background: rgba(0, 0, 0, var(--wall-dim));
+}
+
+/*
+ * Image de fond : une photo est pleine de détails et de zones très claires
+ * ou très sombres. Un voile de la teinte du verre adoucit le haut et le bas
+ * de l'écran (barre du haut, onglets), et un liseré lumineux détache chaque
+ * panneau de l'image. Rien d'animé : aucun coût pour la batterie.
+ */
+[data-fond="image"][data-image] .fond-voile {
+  background:
+    linear-gradient(to bottom, var(--voile), transparent 24%, transparent 76%, var(--voile)),
+    rgba(0, 0, 0, var(--wall-dim));
+}
+
+[data-fond="image"][data-image] .verre {
+  box-shadow:
+    var(--shadow),
+    inset 0 1px 0 var(--lisere),
+    inset 0 0 0 1px color-mix(in srgb, var(--lisere) 40%, transparent);
 }
 
 .fond-grain {

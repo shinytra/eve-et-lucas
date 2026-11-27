@@ -10,6 +10,7 @@ use std::{
 };
 
 use couple_core::appearance::{self, Limits, Preset, SavedTheme, LIMITS};
+use couple_core::palette::ImageSample;
 use couple_core::{Appearance, AppearanceSettings};
 use serde::Serialize;
 use tauri::State;
@@ -187,6 +188,21 @@ pub fn export_theme(state: State<'_, AppearanceState>) -> Result<String, String>
 pub fn import_theme(state: State<'_, AppearanceState>, code: String) -> Result<Appearance, String> {
     state.change("d'importer le thème", |s| {
         Ok(s.set_current(Appearance::from_code(&code)?))
+    })
+}
+
+/// Couleurs et verre tirés de l'image de fond. L'interface envoie l'image
+/// réduite (128 px de côté au plus), en octets RVB encodés en base64.
+#[tauri::command]
+pub fn adapt_to_image(
+    state: State<'_, AppearanceState>,
+    pixels: String,
+    width: usize,
+    height: usize,
+) -> Result<Appearance, String> {
+    let sample = ImageSample::from_base64(width, height, &pixels).map_err(|e| e.to_string())?;
+    state.change("d'adapter les couleurs à l'image", |s| {
+        Ok(s.adapt_to_image(&sample))
     })
 }
 
