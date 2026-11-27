@@ -19,6 +19,58 @@ data class WidgetTask(
 /** Dernière arrivée à la maison. */
 data class LastArrival(val who: String, val at: Long)
 
+/** Où est quelqu'un : dans l'un de ses lieux (`place`) ou ailleurs. */
+data class Presence(
+  val who: String,
+  val inside: Boolean,
+  val place: String,
+  val placeKind: String,
+  val at: Long
+) {
+  fun toJson(): JSONObject =
+    JSONObject()
+      .put("who", who)
+      .put("inside", inside)
+      .put("place", place)
+      .put("placeKind", placeKind)
+      .put("at", at)
+
+  companion object {
+    fun fromJson(json: JSONObject?): Presence? {
+      if (json == null) return null
+      val who = json.optStringOrNull("who")?.trim() ?: return null
+      if (who.isEmpty()) return null
+      val inside = json.opt("inside") as? Boolean ?: return null
+      val at = json.opt("at") as? Number ?: return null
+      return Presence(
+        who,
+        inside,
+        json.optStringOrNull("place") ?: "",
+        json.optStringOrNull("placeKind") ?: "",
+        at.toLong()
+      )
+    }
+
+    /**
+     * Celles de l'appli, remplacées par celles reçues par ntfy quand elles
+     * sont plus récentes (appli fermée depuis), triées par prénom.
+     */
+    fun merge(fromApp: List<Presence>, received: List<Presence>): List<Presence> {
+      val map = fromApp.associateBy { it.who.lowercase() }.toMutableMap()
+      for (r in received) {
+        val key = r.who.lowercase()
+        val known = map[key]
+        // Personne absente des données de l'appli : c'est soi-même (pas
+        // affiché) ou un prénom inconnu ; seulement si l'appli n'a encore
+        // rien envoyé.
+        if (known == null && fromApp.isNotEmpty()) continue
+        if (known == null || r.at > known.at) map[key] = r
+      }
+      return map.values.sortedBy { it.who.lowercase() }
+    }
+  }
+}
+
 /** Date importante à venir (jour du calendrier, sans heure ni fuseau). */
 data class NextDate(
   val title: String,
@@ -40,6 +92,8 @@ data class WidgetContent(
   /** Nombre de tâches à faire au total (au moins `tasks.size`). */
   val openCount: Int,
   val lastArrival: LastArrival?,
+  /** Où sont les autres (pas la personne qui porte ce téléphone). */
+  val presence: List<Presence>,
   /** Prochaines dates, la plus proche en premier (certaines peuvent être passées). */
   val nextDates: List<NextDate>
 ) {
@@ -49,8 +103,11 @@ data class WidgetContent(
 
   companion object {
     /** Données enregistrées, ou `null` s'il n'y en a pas ou si elles sont illisibles. */
-    fun load(context: Context): WidgetContent? =
-      parse(WidgetStore.data(context), WidgetStore.pendingDoneTaskIds(context))
+    fun load(context: Context): WidgetContent? {
+      val content = parse(WidgetStore.data(context), WidgetStore.pendingDoneTaskIds(context))
+        ?: return null
+      return content.copy(presence = Presence.merge(content.presence, WidgetStore.receivedPresence(context)))
+    }
 
     /**
      * Lit le JSON produit par `couple_core::widget::WidgetData`. Une tâche
@@ -76,6 +133,7 @@ data class WidgetContent(
           visible,
           openCount,
           parseArrival(json.optJSONObject("lastArrival")),
+          parsePresence(json.optJSONArray("presence")),
           parseDates(json.optJSONArray("nextDates"))
         )
       } catch (e: Exception) {
@@ -102,6 +160,11 @@ data class WidgetContent(
       val who = json.optStringOrNull("who") ?: return null
       val at = json.opt("at") as? Number ?: return null
       return LastArrival(who, at.toLong())
+    }
+
+    private fun parsePresence(array: JSONArray?): List<Presence> {
+      if (array == null) return emptyList()
+      return (0 until array.length()).mapNotNull { Presence.fromJson(array.optJSONObject(it)) }
     }
 
     private fun parseDates(array: JSONArray?): List<NextDate> {

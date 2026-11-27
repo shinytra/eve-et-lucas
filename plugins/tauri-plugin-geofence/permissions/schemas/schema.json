@@ -295,6 +295,18 @@
       "type": "string",
       "oneOf": [
         {
+          "description": "Enables the add_place command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-add-place",
+          "markdownDescription": "Enables the add_place command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the add_place command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-add-place",
+          "markdownDescription": "Denies the add_place command without any pre-configured scope."
+        },
+        {
           "description": "Enables the check_permissions command without any pre-configured scope.",
           "type": "string",
           "const": "allow-check-permissions",
@@ -305,18 +317,6 @@
           "type": "string",
           "const": "deny-check-permissions",
           "markdownDescription": "Denies the check_permissions command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the clear_home command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-clear-home",
-          "markdownDescription": "Enables the clear_home command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the clear_home command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-clear-home",
-          "markdownDescription": "Denies the clear_home command without any pre-configured scope."
         },
         {
           "description": "Enables the current_position command without any pre-configured scope.",
@@ -331,6 +331,42 @@
           "markdownDescription": "Denies the current_position command without any pre-configured scope."
         },
         {
+          "description": "Enables the list_places command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-list-places",
+          "markdownDescription": "Enables the list_places command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the list_places command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-list-places",
+          "markdownDescription": "Denies the list_places command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the remove_place command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-remove-place",
+          "markdownDescription": "Enables the remove_place command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the remove_place command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-remove-place",
+          "markdownDescription": "Denies the remove_place command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the rename_place command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-rename-place",
+          "markdownDescription": "Enables the rename_place command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the rename_place command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-rename-place",
+          "markdownDescription": "Denies the rename_place command without any pre-configured scope."
+        },
+        {
           "description": "Enables the request_permissions command without any pre-configured scope.",
           "type": "string",
           "const": "allow-request-permissions",
@@ -341,18 +377,6 @@
           "type": "string",
           "const": "deny-request-permissions",
           "markdownDescription": "Denies the request_permissions command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the set_home command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-set-home",
-          "markdownDescription": "Enables the set_home command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the set_home command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-set-home",
-          "markdownDescription": "Denies the set_home command without any pre-configured scope."
         },
         {
           "description": "Enables the set_ring_on_arrival command without any pre-configured scope.",
@@ -367,10 +391,10 @@
           "markdownDescription": "Denies the set_ring_on_arrival command without any pre-configured scope."
         },
         {
-          "description": "Permissions par défaut du géofencing : définir ou effacer la maison, lire la\nposition actuelle, choisir si ce téléphone sonne à l'arrivée, vérifier et\ndemander les autorisations Android.\n\nLa lecture des arrivées enregistrées (`peek_arrivals`, `ack_arrivals`) et le\nréveil par ntfy (`set_push_config`, `register_push`, `peek_received`,\n`ack_received`, `mark_rung`) restent réservés au code Rust de l'appli : ils ne\nsont pas exposés à l'interface (la clé de chiffrement ne passe jamais par elle).\n\n#### This default permission set includes:\n\n- `allow-set-home`\n- `allow-clear-home`\n- `allow-current-position`\n- `allow-set-ring-on-arrival`\n- `allow-check-permissions`\n- `allow-request-permissions`",
+          "description": "Permissions par défaut du géofencing : ajouter, renommer, lister ou retirer\nles lieux (maison, université…), lire la\nposition actuelle, choisir si ce téléphone sonne à l'arrivée, vérifier et\ndemander les autorisations Android.\n\nLa lecture des arrivées enregistrées (`peek_arrivals`, `ack_arrivals`) et le\nréveil par ntfy (`set_push_config`, `register_push`, `peek_received`,\n`ack_received`, `mark_rung`) restent réservés au code Rust de l'appli : ils ne\nsont pas exposés à l'interface (la clé de chiffrement ne passe jamais par elle).\n\n#### This default permission set includes:\n\n- `allow-add-place`\n- `allow-rename-place`\n- `allow-remove-place`\n- `allow-list-places`\n- `allow-current-position`\n- `allow-set-ring-on-arrival`\n- `allow-check-permissions`\n- `allow-request-permissions`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Permissions par défaut du géofencing : définir ou effacer la maison, lire la\nposition actuelle, choisir si ce téléphone sonne à l'arrivée, vérifier et\ndemander les autorisations Android.\n\nLa lecture des arrivées enregistrées (`peek_arrivals`, `ack_arrivals`) et le\nréveil par ntfy (`set_push_config`, `register_push`, `peek_received`,\n`ack_received`, `mark_rung`) restent réservés au code Rust de l'appli : ils ne\nsont pas exposés à l'interface (la clé de chiffrement ne passe jamais par elle).\n\n#### This default permission set includes:\n\n- `allow-set-home`\n- `allow-clear-home`\n- `allow-current-position`\n- `allow-set-ring-on-arrival`\n- `allow-check-permissions`\n- `allow-request-permissions`"
+          "markdownDescription": "Permissions par défaut du géofencing : ajouter, renommer, lister ou retirer\nles lieux (maison, université…), lire la\nposition actuelle, choisir si ce téléphone sonne à l'arrivée, vérifier et\ndemander les autorisations Android.\n\nLa lecture des arrivées enregistrées (`peek_arrivals`, `ack_arrivals`) et le\nréveil par ntfy (`set_push_config`, `register_push`, `peek_received`,\n`ack_received`, `mark_rung`) restent réservés au code Rust de l'appli : ils ne\nsont pas exposés à l'interface (la clé de chiffrement ne passe jamais par elle).\n\n#### This default permission set includes:\n\n- `allow-add-place`\n- `allow-rename-place`\n- `allow-remove-place`\n- `allow-list-places`\n- `allow-current-position`\n- `allow-set-ring-on-arrival`\n- `allow-check-permissions`\n- `allow-request-permissions`"
         }
       ]
     }

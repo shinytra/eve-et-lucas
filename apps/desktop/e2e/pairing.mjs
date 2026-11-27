@@ -49,11 +49,14 @@ const shown = await js("(() => document.getElementById('notes').textContent)()")
 check("l'interface du PC s'est rafraîchie toute seule", shown.includes("Écrite sur le téléphone"));
 const arrivals = await call("ipc_execute_command", { command: "list_arrivals" });
 check("le PC reçoit l'arrivée d'Eve", arrivals.includes('"who":"Eve"'));
-check("l'arrivée est affichée", (await js("(() => document.getElementById('arrivals').textContent)()")).includes("Eve · arrivée à la maison"));
+check("l'arrivée est affichée", (await js("(() => document.getElementById('arrivals').textContent)()")).includes("Eve · arrivée le"));
 if (process.env.NOTIF_LOG) {
   const { readFileSync } = await import("node:fs");
   check("le PC sonne : « Eve arrive à la maison »", readFileSync(process.env.NOTIF_LOG, "utf8").includes("Eve arrive à la maison"));
 }
+const presence = await call("ipc_execute_command", { command: "list_presence" });
+check("le PC sait qu'Eve est à l'université", presence.includes('"place":"Université"'));
+check("la présence est affichée", (await js("(() => document.getElementById('presence').textContent)()")).includes("Eve : Université"));
 const devices = await js("(() => document.getElementById('devices').textContent)()");
 check("le téléphone apparaît dans les appareils", devices.includes("Téléphone de test"));
 

@@ -21,6 +21,7 @@ import com.google.android.gms.tasks.CancellationTokenSource
 import org.unifiedpush.android.connector.INSTANCE_DEFAULT
 import org.unifiedpush.android.connector.UnifiedPush
 import org.unifiedpush.android.connector.data.ResolvedDistributor
+import java.util.UUID
 
 private const val ALIAS_LOCATION = "location"
 private const val ALIAS_BACKGROUND = "backgroundLocation"
@@ -28,10 +29,24 @@ private const val ALIAS_NOTIFICATIONS = "notifications"
 private val ALL_ALIASES = listOf(ALIAS_LOCATION, ALIAS_BACKGROUND, ALIAS_NOTIFICATIONS)
 
 @InvokeArg
-class SetHomeArgs {
+class AddPlaceArgs {
+  var name: String? = null
+  var kind: String? = null
+  var announce: Boolean = false
   var lat: Double = 0.0
   var lng: Double = 0.0
   var radiusM: Float = 0f
+}
+
+@InvokeArg
+class RenamePlaceArgs {
+  var id: String? = null
+  var name: String? = null
+}
+
+@InvokeArg
+class PlaceIdArgs {
+  var id: String? = null
 }
 
 @InvokeArg
@@ -85,6 +100,7 @@ class GeofencePlugin(private val activity: Activity) : Plugin(activity) {
       val payload = JSObject()
       payload.put("id", arrival.id)
       payload.put("at", arrival.at)
+      payload.put("kind", arrival.kind)
       plugin.trigger("arrival", payload)
     }
 
@@ -106,6 +122,23 @@ class GeofencePlugin(private val activity: Activity) : Plugin(activity) {
       o.put("who", arrival.who)
       o.put("device", arrival.device)
       o.put("at", arrival.at)
+      o.put("kind", arrival.kind)
+      o.put("inside", arrival.inside)
+      o.put("place", arrival.place)
+      o.put("placeKind", arrival.placeKind)
+      return o
+    }
+
+    private fun placeJson(place: Place, inside: Boolean): JSObject {
+      val o = JSObject()
+      o.put("id", place.id)
+      o.put("name", place.name)
+      o.put("kind", place.kind)
+      o.put("lat", place.lat)
+      o.put("lng", place.lng)
+      o.put("radiusM", place.radiusM.toDouble())
+      o.put("announce", place.announce)
+      o.put("inside", inside)
       return o
     }
   }
@@ -114,16 +147,17 @@ class GeofencePlugin(private val activity: Activity) : Plugin(activity) {
     super.load(webView)
     instance = this
     ArrivalNotifier.createChannel(activity)
-    // Filet de sécurité : la géofence peut avoir été effacée (localisation
-    // coupée, données des services Google Play vidées…). La réenregistrer
+    // Filet de sécurité : les zones peuvent avoir été effacées (localisation
+    // coupée, données des services Google Play vidées…). Les réenregistrer
     // à chaque lancement ne coûte rien.
-    val home = GeofenceStore.home(activity)
-    if (home != null && GeofenceRegistrar.canGeofence(activity)) {
+    val places = GeofenceStore.places(activity)
+    if (places.isNotEmpty() && GeofenceRegistrar.canGeofence(activity)) {
       GeofenceRegistrar.register(
         activity,
-        home,
+        places,
+        checkOutside = true,
         onSuccess = {},
-        onError = { message -> android.util.Log.w(TAG, "Maison non réenregistrée : $message") }
+        onError = { message -> android.util.Log.w(TAG, "Lieux non réenregistrés : $message") }
       )
     }
   }
@@ -133,29 +167,110 @@ class GeofencePlugin(private val activity: Activity) : Plugin(activity) {
     super.onDestroy(activity)
   }
 
+  /**
+   * Ajoute un lieu là où se trouve le téléphone : il y est donc entré (simple
+   * présence, sans sonnerie), et les autres l'apprennent.
+   */
   @Command
-  fun setHome(invoke: Invoke) {
-    val args = invoke.parseArgs(SetHomeArgs::class.java)
-    val home = Home(args.lat, args.lng, args.radiusM)
+  fun addPlace(invoke: Invoke) {
+    val args = invoke.parseArgs(AddPlaceArgs::class.java)
+    val name = args.name.orEmpty().trim()
+    val kind = args.kind.orEmpty()
+    if (name.isEmpty() || kind !in PlaceKinds.ALL || args.radiusM <= 0f) {
+      invoke.reject("Lieu invalide.")
+      return
+    }
+    if (GeofenceStore.places(activity).size >= GeofenceStore.MAX_PLACES) {
+      invoke.reject("${GeofenceStore.MAX_PLACES} lieux au plus : retires-en un d'abord.")
+      return
+    }
+    val place = Place(
+      UUID.randomUUID().toString(),
+      name,
+      kind,
+      args.lat,
+      args.lng,
+      args.radiusM,
+      args.announce
+    )
     GeofenceRegistrar.register(
       activity,
-      home,
+      listOf(place),
+      checkOutside = false,
       onSuccess = {
-        GeofenceStore.saveHome(activity, home)
-        invoke.resolve()
+        GeofenceStore.addPlace(activity, place)
+        GeofenceStore.recordTransition(
+          activity,
+          System.currentTimeMillis(),
+          listOf(place.id),
+          emptyList(),
+          allowArrival = false
+        )?.let { announce(it) }
+        invoke.resolve(placeJson(place, true))
       },
       onError = { message -> invoke.reject(message) }
     )
   }
 
   @Command
-  fun clearHome(invoke: Invoke) {
-    GeofenceStore.clearHome(activity)
+  fun renamePlace(invoke: Invoke) {
+    val args = invoke.parseArgs(RenamePlaceArgs::class.java)
+    val name = args.name.orEmpty().trim()
+    val id = args.id.orEmpty()
+    if (name.isEmpty() || !GeofenceStore.renamePlace(activity, id, name)) {
+      invoke.reject("Ce lieu n'existe plus.")
+      return
+    }
+    // On y est : les autres voient le nouveau nom tout de suite.
+    GeofenceStore.recordCurrent(activity, System.currentTimeMillis(), id)?.let { announce(it) }
+    invoke.resolve()
+  }
+
+  /**
+   * Retire un lieu ; si l'on y était, les autres apprennent qu'on n'y est
+   * plus. Retiré aussi quand Android refuse d'effacer la zone (localisation
+   * coupée…) : une zone restée chez Android n'a plus de lieu, ses entrées
+   * sont ignorées.
+   */
+  @Command
+  fun removePlace(invoke: Invoke) {
+    val id = invoke.parseArgs(PlaceIdArgs::class.java).id.orEmpty()
+    val forget = {
+      GeofenceStore.recordTransition(
+        activity,
+        System.currentTimeMillis(),
+        emptyList(),
+        listOf(id),
+        allowArrival = false
+      )?.let { announce(it) }
+      GeofenceStore.removePlace(activity, id)
+      invoke.resolve()
+    }
     GeofenceRegistrar.unregister(
       activity,
-      onSuccess = { invoke.resolve() },
-      onError = { message -> invoke.reject(message) }
+      listOf(id),
+      onSuccess = { forget() },
+      onError = { message ->
+        android.util.Log.w(TAG, "Zone non effacée par Android : $message")
+        forget()
+      }
     )
+  }
+
+  @Command
+  fun listPlaces(invoke: Invoke) {
+    val inside = GeofenceStore.insideIds(activity).toSet()
+    val places = JSArray()
+    for (p in GeofenceStore.places(activity)) places.put(placeJson(p, p.id in inside))
+    val result = JSObject()
+    result.put("places", places)
+    invoke.resolve(result)
+  }
+
+  /** Changement de lieu décidé dans l'appli : l'appli le lit, les autres le reçoivent. */
+  private fun announce(event: PendingArrival) {
+    notifyArrival(event)
+    PresenceAnnouncer.push(activity, event) {}
   }
 
   @Command
@@ -210,6 +325,10 @@ class GeofencePlugin(private val activity: Activity) : Plugin(activity) {
       val o = JSObject()
       o.put("id", a.id)
       o.put("at", a.at)
+      o.put("kind", a.kind)
+      o.put("inside", a.inside)
+      o.put("place", a.place)
+      o.put("placeKind", a.placeKind)
       arrivals.put(o)
     }
     val result = JSObject()

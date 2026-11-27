@@ -20,13 +20,31 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
 pub struct Geofence<R: Runtime>(PhantomData<fn() -> R>);
 
 impl<R: Runtime> Geofence<R> {
-    pub fn set_home(&self, lat: f64, lng: f64, radius_m: f32) -> Result<()> {
-        HomeArgs::new(lat, lng, radius_m)?;
+    pub fn add_place(
+        &self,
+        name: &str,
+        kind: &str,
+        announce: bool,
+        lat: f64,
+        lng: f64,
+        radius_m: f32,
+    ) -> Result<Place> {
+        HomeArgs::new(name, kind, announce, lat, lng, radius_m)?;
         Err(Error::Unsupported)
     }
 
-    pub fn clear_home(&self) -> Result<()> {
+    pub fn rename_place(&self, _id: String, name: &str) -> Result<()> {
+        clean_name(name)?;
         Err(Error::Unsupported)
+    }
+
+    pub fn remove_place(&self, _id: String) -> Result<()> {
+        Err(Error::Unsupported)
+    }
+
+    /// Aucun lieu sur PC.
+    pub fn list_places(&self) -> Result<Vec<Place>> {
+        Ok(Vec::new())
     }
 
     pub fn current_position(&self) -> Result<Position> {

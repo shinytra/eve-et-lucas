@@ -20,7 +20,16 @@ pub struct Arrival {
     pub at: i64,
 }
 
-/// Une arrivée de ce téléphone notée par Android, pas encore confirmée avec
+fn arrival_kind() -> String {
+    "arrival".to_owned()
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// Un évènement de ce téléphone noté par Android (arrivée qui fait sonner
+/// les autres, ou simple changement de lieu), pas encore confirmé avec
 /// [`crate::Geofence::ack_arrivals`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,8 +37,39 @@ pub struct PendingArrival {
     /// Identifiant UUID v4 créé par Android : le même que celui envoyé par
     /// ntfy, pour que les autres appareils ne sonnent pas deux fois.
     pub id: String,
-    /// Date de l'arrivée, en millisecondes Unix.
+    /// Date de l'évènement, en millisecondes Unix.
     pub at: i64,
+    /// `arrival` (entrée dans un lieu « à annoncer » : les autres sonnent)
+    /// ou `presence` (entrée ailleurs, ou sortie). Absent : `arrival`
+    /// (noté avant les lieux nommés).
+    #[serde(default = "arrival_kind")]
+    pub kind: String,
+    /// Dans l'un des lieux (sinon sorti de tous).
+    #[serde(default = "yes")]
+    pub inside: bool,
+    /// Nom et type du lieu (entré, ou quitté).
+    #[serde(default)]
+    pub place: String,
+    #[serde(default)]
+    pub place_kind: String,
+}
+
+/// Un lieu enregistré sur ce téléphone (zone de géorepérage).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Place {
+    pub id: String,
+    pub name: String,
+    /// `maison`, `etudes`, `travail` ou `autre`.
+    pub kind: String,
+    pub lat: f64,
+    pub lng: f64,
+    pub radius_m: f32,
+    /// Entrer ici fait sonner les autres appareils.
+    pub announce: bool,
+    /// Le téléphone est dans ce lieu, d'après Android.
+    #[serde(default)]
+    pub inside: bool,
 }
 
 /// Arrivée d'un autre appareil, reçue par ntfy et déchiffrée par Android.
@@ -43,6 +83,15 @@ pub struct ReceivedArrival {
     pub device: String,
     /// Date de l'arrivée, en millisecondes Unix.
     pub at: i64,
+    /// `arrival` (fait sonner) ou `presence` (changement de lieu).
+    #[serde(default = "arrival_kind")]
+    pub kind: String,
+    #[serde(default = "yes")]
+    pub inside: bool,
+    #[serde(default)]
+    pub place: String,
+    #[serde(default)]
+    pub place_kind: String,
 }
 
 /// Réglages du réveil par ntfy, enregistrés par Android (réécrits à chaque
@@ -126,17 +175,80 @@ pub struct PermissionStatus {
     pub notifications: PermissionState,
 }
 
+/// Types de lieux acceptés (les mêmes que `couple_core::presence`).
+pub const PLACE_KINDS: &[&str] = &["maison", "etudes", "travail", "autre"];
+/// Longueur maximale du nom d'un lieu.
+pub const MAX_PLACE_NAME: usize = 40;
+/// Nombre maximal de lieux par téléphone.
+pub const MAX_PLACES: usize = 10;
+
+/// Nom d'un lieu nettoyé (une ligne, sans caractère de contrôle), ou erreur
+/// s'il est vide ou trop long.
+pub(crate) fn clean_name(name: &str) -> Result<String> {
+    let name: String = name
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .filter(|c| !c.is_control())
+        .collect();
+    if name.is_empty() {
+        return Err(Error::InvalidArgs(
+            "Donne un nom à ce lieu (Maison, Université…).".to_owned(),
+        ));
+    }
+    if name.chars().count() > MAX_PLACE_NAME {
+        return Err(Error::InvalidArgs(format!(
+            "Nom trop long : {MAX_PLACE_NAME} caractères au plus."
+        )));
+    }
+    Ok(name)
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct HomeArgs {
+    pub name: String,
+    pub kind: String,
+    pub announce: bool,
     pub lat: f64,
     pub lng: f64,
     pub radius_m: f32,
 }
 
+#[derive(Debug, Serialize)]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub(crate) struct RenameArgs {
+    pub id: String,
+    pub name: String,
+}
+
+#[derive(Debug, Serialize)]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub(crate) struct IdArgs {
+    pub id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub(crate) struct Places {
+    pub places: Vec<Place>,
+}
+
 impl HomeArgs {
     /// Vérifie les paramètres avant de les confier à Android.
-    pub(crate) fn new(lat: f64, lng: f64, radius_m: f32) -> Result<Self> {
+    pub(crate) fn new(
+        name: &str,
+        kind: &str,
+        announce: bool,
+        lat: f64,
+        lng: f64,
+        radius_m: f32,
+    ) -> Result<Self> {
+        let name = clean_name(name)?;
+        if !PLACE_KINDS.contains(&kind) {
+            return Err(Error::InvalidArgs(format!("Type de lieu inconnu : {kind}")));
+        }
         if !lat.is_finite() || !(-90.0..=90.0).contains(&lat) {
             return Err(Error::InvalidArgs(format!(
                 "Latitude invalide : {lat} (attendu entre -90 et 90)"
@@ -152,7 +264,14 @@ impl HomeArgs {
                 "Rayon invalide : {radius_m} m (doit être positif)"
             )));
         }
-        Ok(Self { lat, lng, radius_m })
+        Ok(Self {
+            name,
+            kind: kind.to_owned(),
+            announce,
+            lat,
+            lng,
+            radius_m,
+        })
     }
 }
 
@@ -203,20 +322,32 @@ mod tests {
 
     #[test]
     fn home_args_valides() {
-        let args = HomeArgs::new(48.85, 2.35, 150.0).unwrap();
+        let args =
+            HomeArgs::new("  Université\n Lyon ", "etudes", false, 48.85, 2.35, 150.0).unwrap();
         assert_eq!(
             serde_json::to_value(&args).unwrap(),
-            serde_json::json!({ "lat": 48.85, "lng": 2.35, "radiusM": 150.0 })
+            serde_json::json!({
+                "name": "Université Lyon",
+                "kind": "etudes",
+                "announce": false,
+                "lat": 48.85,
+                "lng": 2.35,
+                "radiusM": 150.0
+            })
         );
+        assert!(HomeArgs::new(" ", "maison", true, 0.0, 0.0, 100.0).is_err());
+        assert!(HomeArgs::new(&"a".repeat(41), "maison", true, 0.0, 0.0, 100.0).is_err());
+        assert!(HomeArgs::new("Piscine", "piscine", true, 0.0, 0.0, 100.0).is_err());
     }
 
     #[test]
     fn home_args_refuse_les_valeurs_absurdes() {
-        assert!(HomeArgs::new(91.0, 0.0, 100.0).is_err());
-        assert!(HomeArgs::new(0.0, -181.0, 100.0).is_err());
-        assert!(HomeArgs::new(f64::NAN, 0.0, 100.0).is_err());
-        assert!(HomeArgs::new(0.0, 0.0, 0.0).is_err());
-        assert!(HomeArgs::new(0.0, 0.0, f32::INFINITY).is_err());
+        let home = |lat, lng, r| HomeArgs::new("Maison", "maison", true, lat, lng, r);
+        assert!(home(91.0, 0.0, 100.0).is_err());
+        assert!(home(0.0, -181.0, 100.0).is_err());
+        assert!(home(f64::NAN, 0.0, 100.0).is_err());
+        assert!(home(0.0, 0.0, 0.0).is_err());
+        assert!(home(0.0, 0.0, f32::INFINITY).is_err());
     }
 
     #[test]
@@ -268,14 +399,31 @@ mod tests {
             r#"{"arrivals":[{"id":"00000000-0000-4000-8000-000000000000","at":1700000000000}]}"#,
         )
         .unwrap();
+        // Noté avant les lieux nommés : une arrivée à la maison.
         assert_eq!(
             a.arrivals,
             vec![PendingArrival {
                 id: "00000000-0000-4000-8000-000000000000".into(),
-                at: 1_700_000_000_000
+                at: 1_700_000_000_000,
+                kind: "arrival".into(),
+                inside: true,
+                place: String::new(),
+                place_kind: String::new(),
             }]
         );
-        let e: Error = HomeArgs::new(0.0, 0.0, -1.0).unwrap_err();
+        let a: Arrivals = serde_json::from_str(
+            r#"{"arrivals":[{"id":"i","at":1,"kind":"presence","inside":false,"place":"Université","placeKind":"etudes"}]}"#,
+        )
+        .unwrap();
+        assert!(!a.arrivals[0].inside);
+        assert_eq!(a.arrivals[0].place_kind, "etudes");
+        let p: Places = serde_json::from_str(
+            r#"{"places":[{"id":"maison","name":"Maison","kind":"maison","lat":1.0,"lng":2.0,"radiusM":150.0,"announce":true,"inside":true}]}"#,
+        )
+        .unwrap();
+        assert_eq!(p.places[0].name, "Maison");
+        assert!(p.places[0].inside);
+        let e: Error = HomeArgs::new("Maison", "maison", true, 0.0, 0.0, -1.0).unwrap_err();
         assert!(serde_json::to_string(&e)
             .unwrap()
             .contains("Rayon invalide"));
@@ -345,7 +493,11 @@ mod tests {
                 id: "00000000-0000-4000-8000-000000000000".into(),
                 who: "Lucas".into(),
                 device: "abc".into(),
-                at: 1
+                at: 1,
+                kind: "arrival".into(),
+                inside: true,
+                place: String::new(),
+                place_kind: String::new(),
             }]
         );
         let e: PushEndpointEvent =

@@ -8,25 +8,48 @@
 
 use tauri::{command, AppHandle, Runtime, State};
 
-use crate::{Geofence, PermissionStatus, PermissionType, Position, Result};
+use crate::{Geofence, PermissionStatus, PermissionType, Place, Position, Result};
 
 #[command]
-pub(crate) async fn set_home<R: Runtime>(
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn add_place<R: Runtime>(
     _app: AppHandle<R>,
     geofence: State<'_, Geofence<R>>,
+    name: String,
+    kind: String,
+    announce: bool,
     lat: f64,
     lng: f64,
     radius_m: f32,
-) -> Result<()> {
-    geofence.set_home(lat, lng, radius_m)
+) -> Result<Place> {
+    geofence.add_place(&name, &kind, announce, lat, lng, radius_m)
 }
 
 #[command]
-pub(crate) async fn clear_home<R: Runtime>(
+pub(crate) async fn rename_place<R: Runtime>(
     _app: AppHandle<R>,
     geofence: State<'_, Geofence<R>>,
+    id: String,
+    name: String,
 ) -> Result<()> {
-    geofence.clear_home()
+    geofence.rename_place(id, &name)
+}
+
+#[command]
+pub(crate) async fn remove_place<R: Runtime>(
+    _app: AppHandle<R>,
+    geofence: State<'_, Geofence<R>>,
+    id: String,
+) -> Result<()> {
+    geofence.remove_place(id)
+}
+
+#[command]
+pub(crate) async fn list_places<R: Runtime>(
+    _app: AppHandle<R>,
+    geofence: State<'_, Geofence<R>>,
+) -> Result<Vec<Place>> {
+    geofence.list_places()
 }
 
 #[command]

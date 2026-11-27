@@ -1152,6 +1152,70 @@ input[type="color"] {
   color: var(--danger);
 }
 
+/* Où est chacun, et les lieux de ce téléphone : cartes (pas de verre dans le verre). */
+.presence,
+.places {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.carte-lieu {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: calc(var(--radius) * 0.6);
+  background: var(--field-bg);
+}
+
+.carte-lieu .emoji {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.carte-lieu .text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.carte-lieu .title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.carte-lieu .meta {
+  font-size: 0.85rem;
+}
+
+.carte-lieu .actions {
+  display: flex;
+  gap: 4px;
+}
+
+.carte-lieu .renommer {
+  display: flex;
+  gap: 6px;
+}
+
+.carte-lieu .renommer input {
+  flex: 1;
+  min-width: 0;
+}
+
+.place-form {
+  display: grid;
+  gap: 8px;
+}
+
+.home h3 {
+  margin: 8px 0 0;
+}
+
 /* Dates importantes */
 .date-next {
   display: grid;

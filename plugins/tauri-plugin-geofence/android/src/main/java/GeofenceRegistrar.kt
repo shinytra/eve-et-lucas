@@ -14,9 +14,14 @@ import com.google.android.gms.location.GeofenceStatusCodes
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
 
-/** Enregistrement de la géofence « maison » auprès des services Google Play. */
+/**
+ * Enregistrement des zones des lieux (une géofence par lieu, identifiée par
+ * l'identifiant du lieu) auprès des services Google Play. Pas de GPS en
+ * continu : Android surveille les zones lui-même, au moindre coût.
+ */
 object GeofenceRegistrar {
-  const val GEOFENCE_ID = "maison"
+  /** Identifiant de l'ancienne géofence « maison » unique, gardé pour ce lieu. */
+  const val LEGACY_ID = "maison"
   const val ACTION_GEOFENCE = "fr.eveetlucas.geofence.ACTION_GEOFENCE"
 
   fun hasPermission(context: Context, permission: String): Boolean =
@@ -31,12 +36,12 @@ object GeofenceRegistrar {
   /** Message expliquant ce qui manque, ou `null` si tout est accordé. */
   fun missingPermissionMessage(context: Context): String? {
     if (!hasPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)) {
-      return "Autorisez d'abord la position précise : elle sert à savoir quand vous arrivez à la maison."
+      return "Autorisez d'abord la position précise : elle sert à savoir dans quel lieu vous êtes."
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
       !hasPermission(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
     ) {
-      return "Choisissez « Toujours autoriser » pour la position : sans cela, l'arrivée n'est pas détectée quand l'appli est fermée."
+      return "Choisissez « Toujours autoriser » pour la position : sans cela, les entrées et sorties ne sont pas détectées quand l'appli est fermée."
     }
     return null
   }
@@ -52,39 +57,59 @@ object GeofenceRegistrar {
     return PendingIntent.getBroadcast(context.applicationContext, 0, intent, flags)
   }
 
-  /** Enregistre (ou remplace) la géofence. Les rappels arrivent sur le fil principal. */
+  /**
+   * Enregistre (ou remplace) les zones de [places], entrées et sorties. Les
+   * rappels arrivent sur le fil principal.
+   *
+   * [checkOutside] : à la réinscription (lancement, redémarrage), Android
+   * signale aussitôt une sortie pour chaque zone où l'on n'est pas, ce qui
+   * corrige un « dans ce lieu » devenu faux pendant que les zones étaient
+   * effacées. Jamais d'entrée signalée à l'inscription : pas de fausse
+   * arrivée si l'on est déjà sur place.
+   */
   @SuppressLint("MissingPermission")
-  fun register(context: Context, home: Home, onSuccess: () -> Unit, onError: (String) -> Unit) {
+  fun register(
+    context: Context,
+    places: List<Place>,
+    checkOutside: Boolean,
+    onSuccess: () -> Unit,
+    onError: (String) -> Unit
+  ) {
     missingPermissionMessage(context)?.let {
       onError(it)
       return
     }
-    val geofence = Geofence.Builder()
-      .setRequestId(GEOFENCE_ID)
-      .setCircularRegion(home.lat, home.lng, home.radiusM)
-      .setExpirationDuration(Geofence.NEVER_EXPIRE)
-      .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER)
-      .build()
-    // Déclencheur initial 0 : pas d'« arrivée » si l'on est déjà à la maison.
-    val request = GeofencingRequest.Builder()
-      .setInitialTrigger(0)
-      .addGeofence(geofence)
-      .build()
+    if (places.isEmpty()) {
+      onSuccess()
+      return
+    }
+    val builder = GeofencingRequest.Builder()
+      .setInitialTrigger(if (checkOutside) GeofencingRequest.INITIAL_TRIGGER_EXIT else 0)
+    for (place in places) {
+      builder.addGeofence(
+        Geofence.Builder()
+          .setRequestId(place.id)
+          .setCircularRegion(place.lat, place.lng, place.radiusM)
+          .setExpirationDuration(Geofence.NEVER_EXPIRE)
+          .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
+          .build()
+      )
+    }
     try {
       LocationServices.getGeofencingClient(context.applicationContext)
-        .addGeofences(request, pendingIntent(context))
+        .addGeofences(builder.build(), pendingIntent(context))
         .addOnSuccessListener { onSuccess() }
-        .addOnFailureListener { e -> onError(errorMessage(e, "d'enregistrer la maison")) }
+        .addOnFailureListener { e -> onError(errorMessage(e, "d'enregistrer le lieu")) }
     } catch (e: SecurityException) {
       onError("Autorisation de position refusée par Android.")
     }
   }
 
-  fun unregister(context: Context, onSuccess: () -> Unit, onError: (String) -> Unit) {
+  fun unregister(context: Context, ids: List<String>, onSuccess: () -> Unit, onError: (String) -> Unit) {
     LocationServices.getGeofencingClient(context.applicationContext)
-      .removeGeofences(listOf(GEOFENCE_ID))
+      .removeGeofences(ids)
       .addOnSuccessListener { onSuccess() }
-      .addOnFailureListener { e -> onError(errorMessage(e, "d'effacer la maison")) }
+      .addOnFailureListener { e -> onError(errorMessage(e, "de retirer le lieu")) }
   }
 
   private fun errorMessage(e: Exception, action: String): String {

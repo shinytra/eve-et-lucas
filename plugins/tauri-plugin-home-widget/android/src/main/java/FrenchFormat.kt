@@ -80,6 +80,36 @@ object FrenchFormat {
     return "$who $verb $day"
   }
 
+  /** Émoji d'un type de lieu (les mêmes que `couple_core::presence`). */
+  fun placeEmoji(kind: String): String = when (kind) {
+    "maison", "" -> "🏠"
+    "etudes" -> "🎓"
+    "travail" -> "💼"
+    else -> "📍"
+  }
+
+  /** « depuis 18 h 42 », « depuis hier 18 h 42 », « depuis le 12 nov. ». */
+  private fun since(at: Long, now: Long): String =
+    when (dayOffset(at, now)) {
+      0 -> "depuis ${time(at, dropZeroMinutes = false)}"
+      -1 -> "depuis hier ${time(at, dropZeroMinutes = false)}"
+      else -> "depuis le ${date(at, now)}"
+    }
+
+  /**
+   * « 🎓 Eve : Université, depuis 8 h 12 », « 🏠 Eve : à la maison, depuis… »
+   * (ancienne arrivée, sans nom de lieu), « 🚶 Eve : ailleurs, depuis 17 h 10 ».
+   * Mêmes mots que l'appli (`ui/arrivals.js`).
+   */
+  fun presence(who: String, inside: Boolean, place: String, placeKind: String, at: Long, now: Long): String {
+    val where = when {
+      !inside -> "🚶 $who : ailleurs"
+      place.isEmpty() -> "🏠 $who : à la maison"
+      else -> "${placeEmoji(placeKind)} $who : $place"
+    }
+    return "$where, ${since(at, now)}"
+  }
+
   /** Le jour existe (mois de 1 à 12 ; le 29 février seulement les années bissextiles). */
   fun isValidDay(year: Int, month: Int, day: Int): Boolean {
     if (year !in 1900..2200 || month !in 1..12 || day < 1) return false
