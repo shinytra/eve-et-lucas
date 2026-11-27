@@ -7,8 +7,10 @@
 // `mark_rung`) passent directement par `run_mobile_plugin`, sans commande
 // Tauri ni permission : l'interface ne peut pas les appeler.
 const COMMANDS: &[&str] = &[
-    "set_home",
-    "clear_home",
+    "add_place",
+    "rename_place",
+    "remove_place",
+    "list_places",
     "current_position",
     "set_ring_on_arrival",
     "check_permissions",

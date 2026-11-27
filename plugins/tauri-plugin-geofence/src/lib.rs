@@ -1,11 +1,15 @@
-//! Plugin Tauri de géofencing : détecte l'arrivée à la maison sur Android,
-//! même quand l'appli est fermée.
+//! Plugin Tauri de géofencing : sait dans quel lieu enregistré (maison,
+//! université, travail…) se trouve le téléphone, même appli fermée, sans GPS
+//! en continu (géorepérage des services Google Play).
 //!
-//! Le module Kotlin (`android/`) enregistre une géofence « maison » auprès des
-//! services Google Play. À chaque entrée (sauf moins de 5 min après la
-//! précédente), son récepteur note l'arrivée (identifiant et date) dans les
-//! préférences Android, affiche une notification et, si demandé, fait sonner
-//! le téléphone. L'appli récupère ensuite ces arrivées avec
+//! Le module Kotlin (`android/`) enregistre une zone par lieu (10 au plus,
+//! chacun avec un nom, un type et l'option « annoncer mon arrivée ») et suit
+//! les entrées et sorties. Quand le téléphone passe d'« ailleurs » à un lieu
+//! annoncé (sauf moins de 5 min après la précédente arrivée), son récepteur
+//! note une arrivée dans les préférences Android, affiche une notification
+//! et, si demandé, fait sonner le téléphone ; tout autre changement (entrée
+//! dans un lieu non annoncé, sortie de tous les lieux) est noté comme simple
+//! présence (`kind` = `presence`), sans sonnerie, et envoyé de la même façon. L'appli récupère ensuite ces arrivées avec
 //! [`Geofence::peek_arrivals`] puis les confirme avec [`Geofence::ack_arrivals`] (au démarrage, ou quand l'évènement
 //! [`Geofence::on_arrival`] la prévient alors qu'elle tourne déjà).
 //!
@@ -64,8 +68,10 @@ impl<R: Runtime, T: Manager<R>> GeofenceExt<R> for T {
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("geofence")
         .invoke_handler(tauri::generate_handler![
-            commands::set_home,
-            commands::clear_home,
+            commands::add_place,
+            commands::rename_place,
+            commands::remove_place,
+            commands::list_places,
             commands::current_position,
             commands::set_ring_on_arrival,
             commands::check_permissions,

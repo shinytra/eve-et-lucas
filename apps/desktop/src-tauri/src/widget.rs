@@ -1,7 +1,7 @@
 //! Widget d'écran d'accueil (téléphone seulement).
 //!
 //! L'appli envoie au widget un résumé tout prêt (`couple_core::widget`) à
-//! chaque changement des tâches, des arrivées ou des dates importantes. Les tâches cochées sur le
+//! chaque changement des tâches, des arrivées, des présences ou des dates importantes. Les tâches cochées sur le
 //! widget sont notées par Android, même appli fermée, puis appliquées ici
 //! au nom de la personne qui porte le téléphone.
 
@@ -67,7 +67,9 @@ mod phone {
         let tasks = state.tasks.lock().list();
         let arrivals = state.arrivals.lock().list();
         let dates = state.dates.lock().upcoming(crate::dates::local_today().0);
-        let mut data = snapshot(&tasks, &arrivals, &dates, now);
+        let presence = state.presence.lock().current(now);
+        let me = crate::arrivals::load_settings(state).who;
+        let mut data = snapshot(&tasks, &arrivals, &dates, &presence, &me, now);
         let key = {
             data.updated_at = 0;
             serde_json::to_string(&data).ok()?

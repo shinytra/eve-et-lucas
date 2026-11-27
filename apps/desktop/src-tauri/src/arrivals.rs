@@ -1,9 +1,10 @@
-//! Arrivée à la maison.
+//! Arrivées et présence dans les lieux (maison, université…).
 //!
 //! - Téléphone : le plugin `tauri-plugin-geofence` (Kotlin) note chaque
-//!   entrée dans la zone « maison », même appli fermée. L'appli les récupère
-//!   au démarrage et à chaque évènement, et les ajoute au document partagé
-//!   `arrivals` au nom de la personne choisie sur ce téléphone.
+//!   entrée ou sortie de lieu, même appli fermée. L'appli les récupère au
+//!   démarrage et à chaque évènement, et les ajoute aux documents partagés
+//!   `presence` (où est chacun) et, pour une arrivée dans un lieu annoncé,
+//!   `arrivals`, au nom de la personne choisie sur ce téléphone.
 //! - Tous les appareils : une arrivée récente venue d'un autre appareil fait
 //!   sonner (notification avec son), une seule fois.
 
@@ -13,12 +14,15 @@ use std::{
     time::Duration,
 };
 
-use couple_core::{arrivals::RING_WITHIN_MS, Arrival};
+use couple_core::{arrivals::RING_WITHIN_MS, Arrival, PresenceEvent};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, State};
 use tauri_plugin_notification::NotificationExt;
 
-use crate::{now_ms, store::AppState};
+use crate::{
+    now_ms,
+    store::{AppState, PRESENCE_DOC},
+};
 
 /// Réglages propres à cet appareil.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -85,6 +89,25 @@ pub fn list_arrivals(state: State<'_, Arc<AppState>>) -> Vec<Arrival> {
     state.arrivals.lock().list()
 }
 
+/// Où est chacun : son dernier évènement (entrée dans un lieu, ou sortie).
+#[tauri::command]
+pub fn list_presence(state: State<'_, Arc<AppState>>) -> Vec<PresenceEvent> {
+    state.presence.lock().current(now_ms())
+}
+
+/// Ajoute un évènement de présence (de ce téléphone, ou reçu par ntfy) ;
+/// prévient la synchro et l'interface s'il est nouveau.
+pub(crate) fn record_presence(state: &AppState, event: &PresenceEvent) -> Result<bool, String> {
+    let added = state
+        .presence
+        .change("d'enregistrer où tu es", |d| d.record(event))?;
+    if added {
+        state.sync_wanted.notify_one();
+        couple_sync::Store::changed(state, &[PRESENCE_DOC.to_owned()]);
+    }
+    Ok(added)
+}
+
 #[tauri::command]
 pub fn arrival_person(state: State<'_, Arc<AppState>>) -> String {
     load_settings(&state).who
@@ -142,9 +165,13 @@ pub(crate) fn add_received(
     Ok(added.is_some())
 }
 
-/// Texte de la notification pour une arrivée.
-fn message(arrival: &Arrival) -> String {
-    format!("{} arrive à la maison", arrival.who)
+/// Texte de la notification pour une arrivée, avec le lieu s'il est connu
+/// (même identifiant dans le document des présences).
+fn message(arrival: &Arrival, place: Option<&PresenceEvent>) -> String {
+    match place.filter(|p| !p.place.is_empty()) {
+        Some(p) => format!("{} arrive · {} {}", arrival.who, p.emoji(), p.place),
+        None => format!("{} arrive à la maison", arrival.who),
+    }
 }
 
 /// Lance la surveillance des arrivées.
@@ -152,6 +179,12 @@ pub fn start(app: &AppHandle, state: Arc<AppState>) {
     if let Err(e) = state
         .arrivals
         .change("de ranger les arrivées", |d| d.prune(now_ms()))
+    {
+        eprintln!("{e}");
+    }
+    if let Err(e) = state
+        .presence
+        .change("de ranger les présences", |d| d.prune(now_ms()))
     {
         eprintln!("{e}");
     }
@@ -206,12 +239,14 @@ fn ring_new_arrivals(app: &AppHandle, state: &AppState) {
             eprintln!("Impossible de noter les arrivées signalées : {e}");
         }
     }
+    let places = state.presence.lock().list();
     for arrival in &to_ring {
+        let place = places.iter().find(|p| p.id == arrival.id);
         let result = app
             .notification()
             .builder()
-            .title(message(arrival))
-            .body("Détecté par son téléphone à l'approche de la maison")
+            .title(message(arrival, place))
+            .body("Détecté par son téléphone en approchant")
             .sound("default")
             .show();
         if let Err(e) = result {
@@ -242,6 +277,8 @@ mod phone {
     use tauri::AppHandle;
     use tauri_plugin_geofence::GeofenceExt;
 
+    use couple_core::PresenceEvent;
+
     use super::load_settings;
     use crate::store::AppState;
 
@@ -267,8 +304,34 @@ mod phone {
         let mut saved = Vec::new();
         for pending in arrivals {
             // Même identifiant que dans le réveil envoyé par Android.
-            match state.arrivals.change("d'enregistrer l'arrivée", |d| {
-                d.add_with_id(&pending.id, &who, &device, pending.at)
+            let arrival = if pending.kind == "arrival" {
+                state
+                    .arrivals
+                    .change("d'enregistrer l'arrivée", |d| {
+                        d.add_with_id(&pending.id, &who, &device, pending.at)
+                    })
+                    .map(|_| ())
+            } else {
+                Ok(())
+            };
+            let presence = PresenceEvent {
+                id: pending.id.clone(),
+                who: who.clone(),
+                device: device.clone(),
+                at: pending.at,
+                inside: pending.inside,
+                place: pending.place.clone(),
+                place_kind: pending.place_kind.clone(),
+            };
+            // Arrivée notée avant la mise à jour (sans lieu) : pas de présence,
+            // aucune sortie ne viendrait la corriger.
+            let legacy = pending.kind == "arrival" && pending.place.is_empty();
+            match arrival.and_then(|()| {
+                if legacy {
+                    Ok(false)
+                } else {
+                    super::record_presence(state, &presence)
+                }
             }) {
                 Ok(_) => saved.push(pending.id),
                 Err(e) => {
@@ -365,13 +428,46 @@ mod tests {
     }
 
     #[test]
-    fn message_names_the_person() {
+    fn message_names_the_person_and_the_place() {
         let a = Arrival {
             id: "x".into(),
             who: "Eve".into(),
             device: "d".into(),
             at: 0,
         };
-        assert_eq!(message(&a), "Eve arrive à la maison");
+        assert_eq!(message(&a, None), "Eve arrive à la maison");
+        let p = PresenceEvent {
+            id: "x".into(),
+            who: "Eve".into(),
+            device: "d".into(),
+            at: 0,
+            inside: true,
+            place: "Maison 2".into(),
+            place_kind: "maison".into(),
+        };
+        assert_eq!(message(&a, Some(&p)), "Eve arrive · 🏠 Maison 2");
+    }
+
+    #[test]
+    fn presence_is_recorded_once() {
+        let dir = crate::store::tests::temp_dir("presence");
+        let state = AppState::load(&dir, "Téléphone").unwrap();
+        let p = PresenceEvent {
+            id: "p1".into(),
+            who: "Eve".into(),
+            device: "tel-eve".into(),
+            at: now_ms(),
+            inside: true,
+            place: "Université".into(),
+            place_kind: "etudes".into(),
+        };
+        assert!(record_presence(&state, &p).unwrap());
+        assert!(!record_presence(&state, &p).unwrap());
+        assert_eq!(state.presence.lock().current(now_ms()), vec![p]);
+        // Gardé sur disque.
+        drop(state);
+        let state = AppState::load(&dir, "Téléphone").unwrap();
+        assert_eq!(state.presence.lock().list().len(), 1);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

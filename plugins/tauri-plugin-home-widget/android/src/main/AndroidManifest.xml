@@ -38,6 +38,11 @@
             android:name="fr.eveetlucas.homewidget.PhotoWidgetReceiver"
             android:exported="false" />
 
+        <!-- Présence de l'autre reçue par ntfy (plugin geofence, même appli). -->
+        <receiver
+            android:name="fr.eveetlucas.homewidget.PresenceReceiver"
+            android:exported="false" />
+
         <!-- Fournit les lignes de la liste des tâches au lanceur. -->
         <service
             android:name="fr.eveetlucas.homewidget.HomeWidgetService"

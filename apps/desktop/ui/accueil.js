@@ -1,5 +1,5 @@
-// Écran d'accueil : résumé du jour (prochaine date, tâches à faire, dernière
-// arrivée, dernière note). Rechargé à chaque affichage et quand une synchro
+// Écran d'accueil : résumé du jour (prochaine date, tâches à faire, où est
+// l'autre ou dernière arrivée, dernière note). Rechargé à chaque affichage et quand une synchro
 // apporte des changements.
 
 (() => {
@@ -9,6 +9,9 @@
   const $ = (id) => document.getElementById(id);
   const errorBox = $("accueil-error");
   const EMOJI = { couple: "💞", anniversaire: "🎂", fete: "🎉", autre: "📅" };
+  const LIEU = { maison: "🏠", etudes: "🎓", travail: "💼", autre: "📍" };
+  // Remplie juste avant les présences (même rafraîchissement).
+  let derniereArrivee = null;
   const MAX_TACHES = 5;
 
   function showError(message) {
@@ -31,6 +34,17 @@
     if (heures < 24) return `il y a ${heures} h`;
     const jours = Math.round(heures / 24);
     return jours === 1 ? "hier" : `il y a ${jours} jours`;
+  }
+
+  // « depuis 18:42 », « depuis hier 18:42 », « depuis le 12/11 » (comme le widget).
+  function depuisHeure(ms) {
+    const d = new Date(ms);
+    const jour = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const ecart = Math.round((jour(new Date()) - jour(d)) / 86_400_000);
+    const heure = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    if (ecart <= 0) return `depuis ${heure}`;
+    if (ecart === 1) return `depuis hier ${heure}`;
+    return `depuis le ${d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`;
   }
 
   function salut() {
@@ -139,9 +153,24 @@
     if (reste > 0) liste.append(el("li", "meta plus-de-taches", `et ${reste} autre${reste > 1 ? "s" : ""}…`));
   }
 
-  function renderArrivee(arrivees) {
+  // Où est l'autre (pas soi-même) ; sans lieux enregistrés, la dernière arrivée.
+  function renderLieu(presences) {
     const carte = $("accueil-arrivee");
-    const derniere = arrivees[0];
+    const moi = $("author").value.trim().toLowerCase();
+    // Prénom pas encore choisi : impossible de savoir qui est « l'autre ».
+    const autre = moi ? presences.find((p) => p.who.trim().toLowerCase() !== moi) : null;
+    if (autre) {
+      const ou = !autre.inside ? "ailleurs" : autre.place || "à la maison";
+      carte.hidden = false;
+      carte.replaceChildren(
+        el("span", "emoji", autre.inside ? LIEU[autre.place_kind] ?? "📍" : "🚶"),
+        el("span", "etiquette", `Où est ${autre.who}`),
+        el("span", "title", ou),
+        el("span", "meta", depuisHeure(autre.at)),
+      );
+      return;
+    }
+    const derniere = derniereArrivee;
     carte.hidden = !derniere;
     if (!derniere) return;
     carte.replaceChildren(
@@ -197,10 +226,12 @@
       salut();
       if (dernierEtat) renderSynchro(dernierEtat);
       // Chaque carte se remplit même si une autre source échoue.
+      derniereArrivee = null;
       const sources = [
         ["list_dates", renderDate],
         ["list_tasks", renderTaches],
-        ["list_arrivals", renderArrivee],
+        ["list_arrivals", (a) => (derniereArrivee = a[0] ?? null)],
+        ["list_presence", renderLieu],
         ["list_notes", renderNote],
       ];
       const resultats = await Promise.allSettled(sources.map(([cmd]) => invoke(cmd)));

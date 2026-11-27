@@ -9,8 +9,8 @@ import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingEvent
 
 /**
- * Reçoit les évènements de la géofence « maison », même appli fermée
- * (Android démarre alors le processus rien que pour ce récepteur).
+ * Reçoit les entrées et sorties des lieux, même appli fermée (Android
+ * démarre alors le processus rien que pour ce récepteur).
  */
 class GeofenceReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
@@ -20,26 +20,44 @@ class GeofenceReceiver : BroadcastReceiver() {
       Log.w(TAG, "Erreur de géofence, code ${event.errorCode}")
       return
     }
-    if (event.geofenceTransition != Geofence.GEOFENCE_TRANSITION_ENTER) return
+    val ids = event.triggeringGeofences.orEmpty().map { it.requestId }
+    val none = emptyList<String>()
+    val entered: List<String>
+    val exited: List<String>
+    when (event.geofenceTransition) {
+      Geofence.GEOFENCE_TRANSITION_ENTER -> {
+        entered = ids
+        exited = none
+      }
+      Geofence.GEOFENCE_TRANSITION_EXIT -> {
+        entered = none
+        exited = ids
+      }
+      else -> return
+    }
 
-    val at = System.currentTimeMillis()
     // D'abord enregistrer : c'est ce que l'appli relira avec `peek_arrivals`.
-    val arrival = GeofenceStore.recordArrival(context, at)
-    if (arrival == null) {
-      Log.i(TAG, "Entrée dans la zone moins de 5 min après la précédente : ignorée")
+    val change = GeofenceStore.recordTransition(
+      context,
+      System.currentTimeMillis(),
+      entered,
+      exited,
+      allowArrival = true
+    )
+    if (change == null) {
+      Log.i(TAG, "Entrée ou sortie sans changement de lieu : rien à annoncer")
       return
     }
-    // Ce téléphone n'a pas à sonner une deuxième fois pour sa propre arrivée.
-    GeofenceStore.markRung(context, listOf(arrival.id))
-    ArrivalNotifier.show(context)
-    GeofencePlugin.notifyArrival(arrival)
+    val arrival = change.kind == KIND_ARRIVAL
+    if (arrival) {
+      // Ce téléphone n'a pas à sonner une deuxième fois pour sa propre arrivée.
+      GeofenceStore.markRung(context, listOf(change.id))
+      ArrivalNotifier.show(context, change)
+    }
+    GeofencePlugin.notifyArrival(change)
 
-    val ring = GeofenceStore.ringOnArrival(context)
-    val config = GeofenceStore.pushConfig(context)
-    // Sans prénom, les autres refuseraient le message : inutile de l'envoyer.
-    val push = PushCrypto.decodeKey(config.key) != null &&
-      config.who.isNotBlank() &&
-      PushSender.validTargets(config.targets).isNotEmpty()
+    val ring = arrival && GeofenceStore.ringOnArrival(context)
+    val push = PresenceAnnouncer.canPush(GeofenceStore.pushConfig(context))
     if (!ring && !push) return
 
     // Garde le récepteur en vie le temps de la sonnerie et de l'envoi (~10 s
@@ -59,15 +77,7 @@ class GeofenceReceiver : BroadcastReceiver() {
           done()
         }
       }
-      if (push) {
-        val message = ArrivalMessage(arrival.id, config.who, config.device, arrival.at)
-        try {
-          PushSender.send(config, message, done)
-        } catch (e: Exception) {
-          Log.w(TAG, "Envoi ntfy impossible", e)
-          done()
-        }
-      }
+      if (push) PresenceAnnouncer.push(context, change, done)
     } finally {
       done()
     }
