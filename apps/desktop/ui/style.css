@@ -357,6 +357,12 @@ main {
   max-width: 820px;
   margin: 0 auto;
   padding: var(--gap) var(--marge) calc(var(--nav-h) + var(--bas) + 3 * var(--marge));
+  /* Les animations qui glissent de côté (entrée d'un écran, suppression)
+     ne doivent jamais élargir la page : sur Android, la page dézoomait
+     alors un peu et la barre d'onglets descendait sous le bord de l'écran.
+     `clip` ne crée pas de zone de défilement (la barre du haut reste
+     collante). */
+  overflow-x: clip;
 }
 
 input,
