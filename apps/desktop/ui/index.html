@@ -52,6 +52,10 @@
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.6A2.6 2.6 0 1 1 12 6.4a2.6 2.6 0 0 1 0 5.2Z" /></svg>
           <span>Arrivée</span>
         </a>
+        <a href="#notifications" data-ecran="notifications" class="secondaire">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.4-2H9.6a2.5 2.5 0 0 0 2.4 2Zm7-6v-5a7 7 0 0 0-5.5-6.8V3a1.5 1.5 0 0 0-3 0v1.2A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z" /></svg>
+          <span>Notifications</span>
+        </a>
         <a href="#appareils" data-ecran="appareils" class="secondaire">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm0 3v13h8V5Z" /></svg>
           <span>Appareils</span>
@@ -269,6 +273,14 @@
         <ul id="arrivals"></ul>
       </section>
 
+      <section id="ecran-notifications" data-ecran="notifications" aria-labelledby="notif-title" class="notifs verre">
+        <h2 id="notif-title">Notifications</h2>
+        <p class="meta">Choisis ce qui te prévient sur cet appareil quand l'autre ajoute ou fait quelque chose. Chaque appareil a ses propres réglages. Sur téléphone, il faut l'appli ntfy pour être prévenu même appli fermée (comme pour l'arrivée à la maison).</p>
+        <p id="notif-owner" class="meta" hidden>Choisis à qui est ce téléphone dans <a href="#maison">Arrivée à la maison</a> : tu ne seras plus prévenu de ce que tu ajoutes toi-même depuis le PC.</p>
+        <p id="notif-error" role="alert" hidden></p>
+        <ul id="notif-list"></ul>
+      </section>
+
       <section id="ecran-fichiers" data-ecran="fichiers" aria-labelledby="files-title" class="files verre">
         <div class="ecran-tete">
           <h2 id="files-title">Fichiers partagés</h2>
@@ -340,6 +352,10 @@
           <a href="#maison" class="tuile">
             <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.6A2.6 2.6 0 1 1 12 6.4a2.6 2.6 0 0 1 0 5.2Z" /></svg>
             <span>Arrivée</span>
+          </a>
+          <a href="#notifications" class="tuile">
+            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.4-2H9.6a2.5 2.5 0 0 0 2.4 2Zm7-6v-5a7 7 0 0 0-5.5-6.8V3a1.5 1.5 0 0 0-3 0v1.2A7 7 0 0 0 5 11v5l-2 2v1h18v-1Z" /></svg>
+            <span>Notifications</span>
           </a>
           <a href="#appareils" class="tuile">
             <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm0 3v13h8V5Z" /></svg>
@@ -422,6 +438,7 @@
     <script src="dates.js"></script>
     <script src="files.js"></script>
     <script src="arrivals.js"></script>
+    <script src="notifications.js"></script>
     <script src="devices.js"></script>
     <script src="accueil.js"></script>
   </body>

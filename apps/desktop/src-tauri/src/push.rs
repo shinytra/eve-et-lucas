@@ -36,7 +36,7 @@ pub fn start(app: &AppHandle, state: Arc<AppState>) {
         }
     }
     #[cfg(desktop)]
-    desktop::start(state);
+    desktop::start(app, state);
     #[cfg(mobile)]
     phone::start(app, state);
 }
@@ -82,9 +82,10 @@ pub(crate) fn accept(
 mod desktop {
     use std::{sync::Arc, time::Duration};
 
-    use couple_core::push::open;
+    use couple_core::{notify::Event, push::open};
     use couple_sync::Store;
     use serde::Deserialize;
+    use tauri::AppHandle;
 
     use crate::{
         now_ms,
@@ -103,14 +104,14 @@ mod desktop {
             && topic[3..].chars().all(|c| c.is_ascii_hexdigit())
     }
 
-    pub fn start(state: Arc<AppState>) {
+    pub fn start(app: &AppHandle, state: Arc<AppState>) {
         // reqwest est compilé sans fournisseur de chiffrement : on prend celui
         // d'iroh (ring). Déjà installé : rien à faire.
         let _ = rustls::crypto::ring::default_provider().install_default();
         let Some(topic) = own_topic(&state) else {
             return;
         };
-        tauri::async_runtime::spawn(listen(state, topic));
+        tauri::async_runtime::spawn(listen(app.clone(), state, topic));
     }
 
     /// Le sujet de ce PC, créé et publié au premier lancement.
@@ -139,7 +140,7 @@ mod desktop {
         Some(topic)
     }
 
-    async fn listen(state: Arc<AppState>, topic: String) {
+    async fn listen(app: AppHandle, state: Arc<AppState>, topic: String) {
         // Pas de délai global (la connexion reste ouverte), mais ntfy envoie
         // un signe de vie toutes les 45 s : sans rien pendant 2 min, on
         // se reconnecte.
@@ -159,7 +160,9 @@ mod desktop {
         let mut failures = 0u32;
         loop {
             let mut connected = false;
-            if let Err(e) = listen_once(&client, &state, &topic, &mut since, &mut connected).await {
+            if let Err(e) =
+                listen_once(&app, &client, &state, &topic, &mut since, &mut connected).await
+            {
                 eprintln!("Écoute ntfy interrompue : {e}");
             }
             if connected {
@@ -182,6 +185,7 @@ mod desktop {
 
     /// Une connexion : lit les évènements ligne par ligne jusqu'à la coupure.
     async fn listen_once(
+        app: &AppHandle,
         client: &reqwest::Client,
         state: &AppState,
         topic: &str,
@@ -202,7 +206,11 @@ mod desktop {
             while let Some(end) = buffer.iter().position(|&b| b == b'\n') {
                 let line: Vec<u8> = buffer.drain(..=end).collect();
                 // L'enregistrement d'une arrivée bloque (fsync).
-                tokio::task::block_in_place(|| handle_line(state, &line, since));
+                tokio::task::block_in_place(|| {
+                    if let Some(event) = handle_line(state, &line, since) {
+                        crate::notify::show_received(app, state, &event);
+                    }
+                });
             }
             if buffer.len() > 64 * 1024 {
                 return Err("évènement ntfy trop long".to_owned());
@@ -213,19 +221,20 @@ mod desktop {
 
     /// Un évènement ntfy. Tout ce qui n'est pas un message chiffré avec notre
     /// clé est ignoré : le sujet est secret, mais rien n'empêche un inconnu
-    /// qui le devinerait d'y écrire.
-    fn handle_line(state: &AppState, line: &[u8], since: &mut String) {
+    /// qui le devinerait d'y écrire. Une arrivée est enregistrée ici ; une
+    /// nouveauté est renvoyée, à afficher selon les réglages.
+    fn handle_line(state: &AppState, line: &[u8], since: &mut String) -> Option<Event> {
         #[derive(Deserialize)]
-        struct Event {
+        struct NtfyEvent {
             id: Option<String>,
             event: String,
             message: Option<String>,
         }
-        let Ok(event) = serde_json::from_slice::<Event>(line) else {
-            return;
+        let Ok(event) = serde_json::from_slice::<NtfyEvent>(line) else {
+            return None;
         };
         if event.event != "message" {
-            return;
+            return None;
         }
         if let Some(id) = event.id {
             if !id.is_empty() && id.len() <= 32 && id.chars().all(|c| c.is_ascii_alphanumeric()) {
@@ -234,19 +243,33 @@ mod desktop {
         }
         let key = state.push.lock().key();
         let (Some(text), Some(key)) = (event.message, key) else {
-            return;
+            return None;
         };
-        match open(&key, &text).map(couple_core::PushMessage::into_arrival) {
-            Ok(Some(arrival)) => {
-                // Appareil inconnu (`Ok(false)`) : rien à garder sur PC, le
-                // sujet est rattrapé au démarrage et la synchro suivra.
-                if let Err(e) = super::accept(state, arrival, false) {
-                    state.notice(e);
-                }
+        let message = match open(&key, &text) {
+            Ok(message) => message,
+            Err(e) => {
+                eprintln!("Message de réveil ignoré : {e}");
+                return None;
             }
-            Ok(None) => {}
-            Err(e) => eprintln!("Message de réveil ignoré : {e}"),
+        };
+        if let Some(arrival) = message.clone().into_arrival() {
+            // Appareil inconnu (`Ok(false)`) : rien à garder sur PC, le
+            // sujet est rattrapé au démarrage et la synchro suivra.
+            if let Err(e) = super::accept(state, arrival, false) {
+                state.notice(e);
+            }
+            return None;
         }
+        // Seulement d'un appareil appairé (la clé suffit, mais un appareil
+        // retiré pourrait encore l'avoir le temps que la nouvelle arrive).
+        let event = message.into_event()?;
+        let known = state
+            .devices
+            .lock()
+            .list()
+            .iter()
+            .any(|d| d.id == event.device);
+        known.then_some(event)
     }
 
     #[cfg(test)]
@@ -300,6 +323,33 @@ mod desktop {
             // Reçu deux fois (rattrapage après une reconnexion) : une seule arrivée.
             handle_line(&state, line.to_string().as_bytes(), &mut since);
             assert_eq!(state.arrivals.lock().list(), vec![arrival]);
+            std::fs::remove_dir_all(dir).unwrap();
+        }
+
+        #[test]
+        fn received_news_is_returned_from_paired_devices_only() {
+            let dir = crate::store::tests::temp_dir("push-news");
+            let state = AppState::load(&dir, "PC").unwrap();
+            state.push.change("", |d| d.ensure_key()).unwrap();
+            let key = state.push.lock().key().unwrap();
+            let note = couple_core::NotesDoc::new()
+                .add("Eve", "Courses", "", 1)
+                .unwrap();
+            let event = Event::note_added(&note, "tel-eve", now_ms());
+            let text = seal(&key, &PushMessage::event(&event)).unwrap();
+            let line = serde_json::json!({"id": "n1", "event": "message", "message": text});
+            let mut since = CATCH_UP.to_owned();
+            assert!(handle_line(&state, line.to_string().as_bytes(), &mut since).is_none());
+            state
+                .devices
+                .change("", |d| d.upsert("tel-eve", "Téléphone d'Eve", 1))
+                .unwrap();
+            assert_eq!(
+                handle_line(&state, line.to_string().as_bytes(), &mut since),
+                Some(event)
+            );
+            // Une nouveauté n'est pas une arrivée.
+            assert!(state.arrivals.lock().list().is_empty());
             std::fs::remove_dir_all(dir).unwrap();
         }
 
@@ -440,15 +490,20 @@ pub(crate) mod phone {
         };
         // Même repli que pour les arrivées enregistrées : sans prénom, les
         // autres refuseraient le message.
-        let who = match crate::arrivals::load_settings(state).who {
-            who if !who.trim().is_empty() => who,
-            _ => state.device_name(),
+        let owner = crate::arrivals::load_settings(state).who.trim().to_owned();
+        let who = if owner.is_empty() {
+            state.device_name()
+        } else {
+            owner.clone()
         };
         let config = PushConfig {
             key,
             who,
             device: me,
             targets,
+            notify: crate::notify::load_settings(state).enabled_kinds(),
+            owner,
+            devices: allowed,
         };
         if let Err(e) = app.geofence().set_push_config(config) {
             eprintln!("Impossible de configurer le réveil : {e}");

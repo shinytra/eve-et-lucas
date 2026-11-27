@@ -11,7 +11,8 @@
 //!
 //! Format d'un message (le même dans le code Kotlin du plugin geofence) :
 //! `"EL1." + base64(nonce de 12 octets || chiffré || tag de 16 octets)`, le
-//! clair étant le JSON de [`PushMessage`].
+//! clair étant le JSON de [`PushMessage`]. Le même canal annonce aussi les
+//! nouveautés (note ajoutée, tâche faite…), voir [`crate::notify`].
 
 use aes_gcm::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
@@ -192,6 +193,14 @@ pub struct PushMessage {
     pub who: String,
     pub device: String,
     pub at: i64,
+    /// Nouveautés seulement (voir [`crate::notify`]) : élément concerné,
+    /// titre et texte de la notification. Absents d'une arrivée.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub item: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub title: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub body: String,
 }
 
 impl PushMessage {
@@ -203,6 +212,9 @@ impl PushMessage {
             who: arrival.who.clone(),
             device: arrival.device.clone(),
             at: arrival.at,
+            item: String::new(),
+            title: String::new(),
+            body: String::new(),
         }
     }
 
@@ -267,6 +279,9 @@ mod tests {
             who: "Eve".into(),
             device: "d".into(),
             at: 1,
+            item: String::new(),
+            title: String::new(),
+            body: String::new(),
         }
     }
 

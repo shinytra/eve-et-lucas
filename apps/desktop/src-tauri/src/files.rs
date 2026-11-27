@@ -214,6 +214,9 @@ pub async fn upload_finish(
     let _ = std::fs::remove_file(&path);
     let file = result?;
     changed(&state);
+    crate::notify::announce(&state, |me, at| {
+        couple_core::notify::Event::file_shared(&file, me, at)
+    });
     Ok(file)
 }
 

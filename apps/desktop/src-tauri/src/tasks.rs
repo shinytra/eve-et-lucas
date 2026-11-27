@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use couple_core::Task;
+use couple_core::{notify::Event, Task};
 use tauri::State;
 
 use crate::{now_ms, store::AppState};
@@ -36,6 +36,7 @@ pub fn add_task(
         doc.add(&author, &title, &assignee, due_at, now_ms())
     })?;
     changed(&state);
+    crate::notify::announce(&state, |me, at| Event::task_added(&task, &author, me, at));
     Ok(task)
 }
 
@@ -61,10 +62,16 @@ pub fn set_task_done(
     done: bool,
     by: String,
 ) -> Result<Task, String> {
-    let task = state.tasks.change("de cocher la tâche", |doc| {
+    // Lu dans la même modification : deux clics rapprochés n'annoncent qu'une fois.
+    let (task, newly_done) = state.tasks.change("de cocher la tâche", |doc| {
+        let was_done = doc.get(&id).is_ok_and(|t| t.done);
         doc.set_done(&id, done, &by, now_ms())
+            .map(|t| (t, done && !was_done))
     })?;
     changed(&state);
+    if newly_done {
+        crate::notify::announce(&state, |me, at| Event::task_done(&task, &by, me, at));
+    }
     Ok(task)
 }
 
