@@ -74,6 +74,25 @@ class HomeWidgetPlugin(private val activity: Activity) : Plugin(activity) {
     invoke.resolve()
   }
 
+  /** Enregistre les images du widget photo et redessine ces widgets. */
+  @Command
+  fun updatePhotos(invoke: Invoke) {
+    val args = invoke.parseArgs(UpdateArgs::class.java)
+    val data = args.data
+    if (data == null) {
+      invoke.reject("Données du widget photo manquantes.")
+      return
+    }
+    PhotoWidgetStore.saveData(activity, data)
+    try {
+      // Lecture des images hors du fil principal.
+      PhotoWidgetUpdater.refreshAllAsync(activity)
+    } catch (e: Exception) {
+      Log.w(TAG, "Widget photo non redessiné", e)
+    }
+    invoke.resolve()
+  }
+
   @Command
   fun peekActions(invoke: Invoke) {
     val actions = JSArray()

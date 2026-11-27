@@ -5,7 +5,8 @@
 //! les documents sur le disque (`store.rs`), les synchronise avec les autres
 //! appareils (`sync.rs`), affiche les rappels des tâches (`reminders.rs`)
 //! et des dates importantes (`dates.rs`), garde les affiches des animés
-//! (`animes.rs`) et reçoit les musiques partagées (`music.rs`).
+//! (`animes.rs`), reçoit les musiques partagées (`music.rs`) et prépare les
+//! images du widget photo (`photos.rs`).
 //! Aucune règle métier ici.
 
 use std::{
@@ -25,6 +26,7 @@ mod desktop;
 mod files;
 mod music;
 mod notify;
+mod photos;
 mod push;
 mod reminders;
 mod store;
@@ -187,6 +189,7 @@ pub fn run() {
             dates::start(app.handle(), state.clone());
             arrivals::start(app.handle(), state.clone());
             widget::start(app.handle(), state.clone());
+            photos::start(app.handle(), state.clone());
             animes::start(app.handle(), state.clone());
             music::start(app.handle(), state.clone());
             push::start(app.handle(), state);
@@ -237,6 +240,10 @@ pub fn run() {
             files::download_file,
             files::file_content,
             files::save_file,
+            photos::list_cadres,
+            photos::add_cadre,
+            photos::set_cadre_fit,
+            photos::remove_cadre,
             sync::list_devices,
             sync::this_device,
             sync::rename_this_device,

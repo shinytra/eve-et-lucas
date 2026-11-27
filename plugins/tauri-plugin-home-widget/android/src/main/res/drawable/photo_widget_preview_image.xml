@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Aperçu : un cadre arrondi, un soleil et deux collines. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="110dp"
+    android:height="110dp"
+    android:viewportWidth="110"
+    android:viewportHeight="110">
+    <path
+        android:fillColor="#FFF8BBD0"
+        android:pathData="M20,0h70a20,20 0,0 1,20 20v70a20,20 0,0 1,-20 20h-70a20,20 0,0 1,-20 -20v-70a20,20 0,0 1,20 -20z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M78,32m-11,0a11,11 0,1 1,22 0a11,11 0,1 1,-22 0" />
+    <path
+        android:fillColor="#FFC2185B"
+        android:pathData="M0,86l30,-30 26,24 16,-14 38,34v0a20,20 0,0 1,-20 10h-70a20,20 0,0 1,-20 -20z" />
+</vector>
