@@ -1,0 +1,19 @@
+[package]
+name = "tauri-plugin-apk-install"
+version = "0.1.0"
+publish = false
+description = "Android : ouvre l'installeur du système sur un APK de mise à jour téléchargé par l'appli."
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+# Exigé par `tauri-plugin` : doit être identique au nom du crate.
+links = "tauri-plugin-apk-install"
+
+[build-dependencies]
+tauri-plugin = { version = "2.7", features = ["build"] }
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tauri = { version = "2.12", default-features = false }
