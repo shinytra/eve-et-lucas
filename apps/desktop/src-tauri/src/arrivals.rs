@@ -103,6 +103,8 @@ pub fn set_arrival_person(state: State<'_, Arc<AppState>>, who: String) -> Resul
     save_settings(&state, &settings)?;
     // Le plugin doit envoyer le bon prénom dans les réveils.
     state.push_wanted.notify_one();
+    // Musiques partagées avant le choix du prénom : elles peuvent être ajoutées.
+    state.music_wanted.notify_one();
     Ok(())
 }
 

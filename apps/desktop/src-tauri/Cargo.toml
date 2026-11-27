@@ -26,6 +26,8 @@ uuid.workspace = true
 data-encoding = "2"
 tauri = { version = "2.12", features = ["tray-icon"] }
 tauri-plugin-notification = "2.8"
+# Ouvre un morceau dans YouTube Music (appli Android si installée, navigateur sur PC).
+tauri-plugin-opener = "2.7"
 # HTTPS : réveil par ntfy (PC) et recherche AniList + affiches des animés
 # (PC et téléphone). Déjà utilisés par iroh, mêmes options.
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }
@@ -38,6 +40,8 @@ jiff = "1"
 tauri-plugin-geofence = { path = "../../../plugins/tauri-plugin-geofence" }
 # Widget d'écran d'accueil (Android) ; sur PC, chaque appel est sans effet.
 tauri-plugin-home-widget = { path = "../../../plugins/tauri-plugin-home-widget" }
+# Menu Partager d'Android (ajout d'une musique) ; sur PC, chaque appel est sans effet.
+tauri-plugin-share-target = { path = "../../../plugins/tauri-plugin-share-target" }
 # Pont pour le serveur MCP Tauri (Claude Code voit et pilote l'appli).
 # Seulement avec `--features mcp-bridge`, jamais dans une version distribuée.
 tauri-plugin-mcp-bridge = { version = "=0.13.2", optional = true }

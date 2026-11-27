@@ -1427,6 +1427,90 @@ input[type="color"] {
   font-size: 0.85rem;
 }
 
+/* ---------- Musiques ---------- */
+
+#musiques {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.musique {
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--field-bg);
+}
+
+.musique.ecoutee {
+  opacity: 0.75;
+}
+
+.musique .corps {
+  flex: 1;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pochette {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  aspect-ratio: 16 / 9;
+  align-self: flex-start;
+  overflow: hidden;
+  border-radius: calc(var(--radius) * 0.45);
+  background: linear-gradient(160deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #000));
+}
+
+.pochette img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.note-musique {
+  color: #fff;
+  font-size: 1.6rem;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.musique .mot {
+  margin: 2px 0;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.musique .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.musique .actions .principal {
+  white-space: nowrap;
+  padding: 6px 14px;
+  font-size: 0.9rem;
+}
+
+.musique .actions .check {
+  margin-right: auto;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 420px) {
+  .pochette {
+    width: 72px;
+  }
+}
+
 .filtres {
   display: flex;
   gap: 6px;

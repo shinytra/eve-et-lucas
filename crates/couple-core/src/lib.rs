@@ -11,6 +11,7 @@ pub mod arrivals;
 pub mod dates;
 pub mod devices;
 pub mod files;
+pub mod music;
 pub mod notes;
 pub mod notify;
 pub mod palette;
@@ -25,6 +26,7 @@ pub use arrivals::{Arrival, ArrivalsDoc};
 pub use dates::{DateInput, DateReminder, DatesDoc, Day, ImportantDate, UpcomingDate};
 pub use devices::{Device, DevicesDoc};
 pub use files::{FilesDoc, SharedFile};
+pub use music::{Music, MusicDoc};
 pub use notes::{Note, NotesDoc};
 pub use push::{PushDoc, PushMessage};
 pub use sync::{SyncState, Syncable};
@@ -64,6 +66,14 @@ pub enum Error {
     InvalidAnimeStatus(String),
     #[error("recherche AniList impossible : {0}")]
     AniList(String),
+    #[error("la musique {0} n'existe pas")]
+    MusicNotFound(String),
+    #[error("lien de musique refusé : {0}")]
+    InvalidMusicLink(String),
+    #[error("{0} est déjà dans la liste (recommandée par {1})")]
+    MusicAlreadyAdded(String, String),
+    #[error("ce texte ne doit pas dépasser {0} caractères")]
+    MusicTextTooLong(usize),
     #[error("le fichier {0} n'existe pas")]
     FileNotFound(String),
     #[error("un fichier partagé ne doit pas dépasser {0} Mo")]

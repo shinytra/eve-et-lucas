@@ -74,7 +74,10 @@ pub(crate) fn client() -> Result<reqwest::Client, String> {
 }
 
 /// Lit le corps d'une réponse sans dépasser `max` octets.
-async fn read_limited(mut response: reqwest::Response, max: usize) -> Result<Vec<u8>, String> {
+pub(crate) async fn read_limited(
+    mut response: reqwest::Response,
+    max: usize,
+) -> Result<Vec<u8>, String> {
     let mut body = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
         if body.len() + chunk.len() > max {

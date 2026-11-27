@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Tests de bout en bout de l'appli PC, pilotée par le serveur MCP Tauri.",
   "scripts": {
-    "test": "node moi.mjs captures && node notes.mjs capture-e2e.png && node tasks.mjs capture-taches.png && node files.mjs capture-fichiers.png && node dates.mjs capture-dates.png && node animes.mjs capture-animes.png && node navigation.mjs captures && node notifications.mjs captures",
+    "test": "node moi.mjs captures && node notes.mjs capture-e2e.png && node tasks.mjs capture-taches.png && node files.mjs capture-fichiers.png && node dates.mjs capture-dates.png && node animes.mjs capture-animes.png && node musiques.mjs capture-musiques.png && node navigation.mjs captures && node notifications.mjs captures",
     "test:apparence": "node apparence.mjs captures"
   },
   "dependencies": {
