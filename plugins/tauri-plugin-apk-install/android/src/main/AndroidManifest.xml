@@ -1,0 +1,23 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Ouvrir l'installeur d'Android sur la nouvelle version. Android
+         demande quand même à la personne d'autoriser l'appli (une fois), puis
+         de confirmer chaque mise à jour. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <application>
+        <!-- Sous-classe à part : deux bibliothèques qui déclarent chacune
+             androidx.core.content.FileProvider entreraient en conflit.
+             Donne à l'installeur, le temps de l'installation, l'accès en
+             lecture au seul dossier cache/maj/ (non exporté). -->
+        <provider
+            android:name="fr.eveetlucas.apkinstall.MajFileProvider"
+            android:authorities="${applicationId}.majapk"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/apk_install_paths" />
+        </provider>
+    </application>
+</manifest>

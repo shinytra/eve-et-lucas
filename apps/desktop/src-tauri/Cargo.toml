@@ -42,6 +42,8 @@ tauri-plugin-geofence = { path = "../../../plugins/tauri-plugin-geofence" }
 tauri-plugin-home-widget = { path = "../../../plugins/tauri-plugin-home-widget" }
 # Menu Partager d'Android (ajout d'une musique) ; sur PC, chaque appel est sans effet.
 tauri-plugin-share-target = { path = "../../../plugins/tauri-plugin-share-target" }
+# Installeur d'Android pour les mises à jour ; sur PC, chaque appel renvoie une erreur.
+tauri-plugin-apk-install = { path = "../../../plugins/tauri-plugin-apk-install" }
 # Pont pour le serveur MCP Tauri (Claude Code voit et pilote l'appli).
 # Seulement avec `--features mcp-bridge`, jamais dans une version distribuée.
 tauri-plugin-mcp-bridge = { version = "=0.13.2", optional = true }
@@ -50,12 +52,18 @@ tauri-plugin-mcp-bridge = { version = "=0.13.2", optional = true }
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2.5"
 tauri-plugin-single-instance = "2.3"
+# Mise à jour depuis l'appli : installateur signé, vérifié puis installé.
+tauri-plugin-updater = { version = "2.10", default-features = false, features = ["rustls-tls"] }
 
 # Seulement sur téléphone : scanner le QR code d'appairage.
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 tauri-plugin-barcode-scanner = "2.5"
 # Date des rappels programmés auprès d'Android.
 time = "0.3"
+# Téléchargement de l'APK de mise à jour dans un fichier.
+tokio = { version = "1", features = ["fs", "io-util"] }
+# Empreinte de l'APK de mise à jour (déjà dans l'arbre des dépendances).
+sha2 = "0.10"
 
 [features]
 mcp-bridge = ["dep:tauri-plugin-mcp-bridge"]

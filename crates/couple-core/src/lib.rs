@@ -18,6 +18,7 @@ pub mod palette;
 pub mod push;
 pub mod sync;
 pub mod tasks;
+pub mod update;
 pub mod widget;
 
 pub use animes::{Anime, AnimeInfo, AnimesDoc};
@@ -102,6 +103,8 @@ pub enum Error {
     TooManyThemes(usize),
     #[error("image de fond refusée : {0}")]
     InvalidWallpaper(String),
+    #[error("mise à jour refusée : {0}")]
+    InvalidUpdate(String),
     // Les erreurs des bibliothèques sont « boxées » pour garder `Error` petit.
     #[error("document Automerge invalide : {0}")]
     Automerge(Box<automerge::AutomergeError>),

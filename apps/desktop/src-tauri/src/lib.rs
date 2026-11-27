@@ -30,6 +30,7 @@ mod reminders;
 mod store;
 mod sync;
 mod tasks;
+mod update;
 mod widget;
 
 use store::AppState;
@@ -136,6 +137,7 @@ pub fn run() {
             .plugin(tauri_plugin_geofence::init())
             .plugin(tauri_plugin_home_widget::init())
             .plugin(tauri_plugin_share_target::init())
+            .plugin(tauri_plugin_apk_install::init())
             // Économie de batterie : réseau coupé peu après le passage en
             // arrière-plan, rallumé au retour (voir `sync::suspended`).
             .on_window_event(|window, event| match event {
@@ -169,6 +171,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(sync::SyncHandle::default())
         .manage(files::Uploads::default())
+        .manage(update::UpdateState::default())
         .setup(|app| {
             #[cfg(feature = "mcp-bridge")]
             app.add_capability(include_str!("../capabilities-dev/mcp-bridge.json"))?;
@@ -257,6 +260,8 @@ pub fn run() {
             appearance::adapt_to_image,
             notify::notification_settings,
             notify::set_notification,
+            update::check_update,
+            update::install_update,
         ])
         .run(tauri::generate_context!());
 

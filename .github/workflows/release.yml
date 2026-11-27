@@ -7,6 +7,8 @@ name: Version à télécharger
 # - Pousser une étiquette `v0.1.0` (ou lancer le workflow à la main depuis
 #   l'onglet Actions) publie la version de `tauri.conf.json`.
 # - Une PR qui modifie ce fichier construit tout sans rien publier.
+# - Publiée sur le dépôt public de `couple_core::update::RELEASES_REPO` :
+#   l'appli y lit latest.json pour se mettre à jour toute seule.
 
 on:
   push:
@@ -33,13 +35,42 @@ jobs:
         run: npm ci
       # Sans --features mcp-bridge : le pont MCP n'a pas d'authentification
       # et ne doit jamais se retrouver dans une version distribuée.
+      # Mise à jour depuis l'appli : l'installateur est signé (fichier .sig)
+      # avec la clé des secrets TAURI_SIGNING_PRIVATE_KEY et
+      # TAURI_SIGNING_PRIVATE_KEY_PASSWORD ; l'appli installée vérifie cette
+      # signature avec la clé publique de tauri.conf.json. Sans ces secrets,
+      # une PR signe avec une clé jetable et une publication échoue.
       - name: Construire l'installateur (NSIS)
         working-directory: apps/desktop/src-tauri
-        run: npm run tauri -- build --bundles nsis --ci
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # createUpdaterArtifacts seulement ici : un build local sans la clé
+          # privée reste possible.
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "Clé de signature des mises à jour du dépôt utilisée."
+            npm run tauri -- build --bundles nsis --ci --config '{"bundle":{"createUpdaterArtifacts":true}}'
+          elif [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            echo "::warning::Pas de secret TAURI_SIGNING_PRIVATE_KEY : installateur signé avec une clé jetable (PR seulement)."
+            key="$RUNNER_TEMP/maj.key"
+            TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$(openssl rand -hex 16)
+            npm run tauri -- signer generate -w "$key" -p "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" --ci -f > /dev/null
+            export TAURI_SIGNING_PRIVATE_KEY="$key" TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+            config=$(jq -cn --arg k "$(cat "$key.pub")" '{bundle:{createUpdaterArtifacts:true},plugins:{updater:{pubkey:$k}}}')
+            npm run tauri -- build --bundles nsis --ci --config "$config"
+          else
+            echo "::error::Secrets TAURI_SIGNING_PRIVATE_KEY et TAURI_SIGNING_PRIVATE_KEY_PASSWORD manquants : impossible de publier une mise à jour pour le PC."
+            exit 1
+          fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows
-          path: target/release/bundle/nsis/*.exe
+          path: |
+            target/release/bundle/nsis/*.exe
+            target/release/bundle/nsis/*.exe.sig
           if-no-files-found: error
           retention-days: 7
 
@@ -127,16 +158,18 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [windows, android]
     runs-on: ubuntu-latest
+    # Publication avec VERSIONS_TOKEN sur le dépôt public : rien à écrire ici.
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: construit
-      - name: Créer la version et y joindre les fichiers
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # latest.json : dernière version, lue par l'appli pour se mettre à jour
+      # (format du plugin updater de Tauri, plus l'entrée android-aarch64 avec
+      # l'empreinte SHA-256 de l'APK, voir couple_core::update).
+      - name: Préparer les fichiers et latest.json
         run: |
           set -euo pipefail
           version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
@@ -145,16 +178,69 @@ jobs:
             echo "L'étiquette $GITHUB_REF_NAME ne correspond pas à la version $version de tauri.conf.json." >&2
             exit 1
           fi
+          repo=$(grep -oP 'RELEASES_REPO: &str = "\K[^"]+' crates/couple-core/src/update.rs)
           mkdir publie
           exe=$(find construit/windows -name '*.exe' | head -n 1)
+          sig=$(find construit/windows -name '*.exe.sig' | head -n 1)
           apk=$(find construit/android -name '*.apk' | head -n 1)
-          cp "$exe" "publie/Eve-et-Lucas-$version-Windows.exe"
-          cp "$apk" "publie/Eve-et-Lucas-$version-Android.apk"
-          if gh release view "$tag" > /dev/null 2>&1; then
-            gh release upload "$tag" publie/* --clobber
+          # Sans signature, aucun PC n'accepterait la mise à jour : on s'arrête.
+          for f in "$exe" "$sig" "$apk"; do
+            if [ -z "$f" ] || [ ! -s "$f" ]; then
+              echo "::error::Installateur, signature (.exe.sig) ou APK manquant."
+              exit 1
+            fi
+          done
+          exe_name="Eve-et-Lucas-$version-Windows.exe"
+          apk_name="Eve-et-Lucas-$version-Android.apk"
+          cp "$exe" "publie/$exe_name"
+          cp "$apk" "publie/$apk_name"
+          base="https://github.com/$repo/releases/download/$tag"
+          jq -n \
+            --arg version "$version" \
+            --arg notes "Nouvelle version $version d'Eve & Lucas." \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg sig "$(cat "$sig")" \
+            --arg exe "$base/$exe_name" \
+            --arg apk "$base/$apk_name" \
+            --arg sha "$(sha256sum "publie/$apk_name" | cut -d' ' -f1)" \
+            '{version: $version, notes: $notes, pub_date: $date, platforms: {
+               "windows-x86_64": {signature: $sig, url: $exe},
+               "android-aarch64": {url: $apk, sha256: $sha}
+             }}' > publie/latest.json
+          cat publie/latest.json
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "repo=$repo"
+          } >> "$GITHUB_OUTPUT"
+        id: fichiers
+      # Le code reste privé : les versions sont publiées sur un dépôt public à
+      # part (seul endroit que l'appli peut lire sans mot de passe), avec le
+      # secret VERSIONS_TOKEN (jeton « fine-grained » limité à ce dépôt,
+      # permission Contents en écriture). Ce dépôt doit avoir au moins un
+      # commit (README) : l'étiquette de la version y est posée sur sa branche
+      # principale.
+      - name: Publier la version
+        env:
+          GH_TOKEN: ${{ secrets.VERSIONS_TOKEN }}
+          TAG: ${{ steps.fichiers.outputs.tag }}
+          VERSION: ${{ steps.fichiers.outputs.version }}
+          REPO: ${{ steps.fichiers.outputs.repo }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::Secret VERSIONS_TOKEN manquant : impossible de publier sur $REPO."
+            exit 1
+          fi
+          if ! gh api "repos/$REPO/commits?per_page=1" > /dev/null 2>&1; then
+            echo "::error::Le dépôt $REPO est introuvable, vide (créer un README) ou le jeton n'y a pas accès."
+            exit 1
+          fi
+          if gh release view "$TAG" --repo "$REPO" > /dev/null 2>&1; then
+            gh release upload "$TAG" publie/* --clobber --repo "$REPO"
           else
-            gh release create "$tag" publie/* \
-              --target "$GITHUB_SHA" \
-              --title "Eve & Lucas $version" \
+            gh release create "$TAG" publie/* \
+              --repo "$REPO" \
+              --title "Eve & Lucas $VERSION" \
               --notes-file .github/release-notes.md
           fi
