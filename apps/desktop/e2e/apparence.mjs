@@ -51,6 +51,8 @@ const cssVar = (name) => js(`(() => getComputedStyle(document.documentElement).g
 console.log(await call("driver_session", { action: "start", host: "127.0.0.1", port: 9223 }));
 await call("manage_window", { action: "resize", width: 1100, height: 760, logical: true });
 await sleep(500);
+// Prénom de l'appareil déjà choisi : pas de fenêtre de bienvenue (dossier de données neuf).
+await call("ipc_execute_command", { command: "set_arrival_person", args: { who: "Lucas" } });
 
 // Deux notes d'exemple pour que les captures ressemblent à un vrai usage.
 const added = [];

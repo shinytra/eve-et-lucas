@@ -36,7 +36,7 @@
   function salut() {
     const h = new Date().getHours();
     const mot = h >= 18 || h < 5 ? "Bonsoir" : "Bonjour";
-    $("accueil-title").textContent = `${mot} ${$("author").value} 👋`;
+    $("accueil-title").textContent = `${mot} ${$("author").value} 👋`.replace("  ", " ");
     const jour = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
     $("accueil-jour").textContent = jour.charAt(0).toUpperCase() + jour.slice(1);
   }

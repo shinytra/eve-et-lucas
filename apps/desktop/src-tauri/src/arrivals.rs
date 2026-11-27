@@ -23,7 +23,9 @@ use crate::{now_ms, store::AppState};
 /// Réglages propres à cet appareil.
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct ArrivalSettings {
-    /// Qui porte ce téléphone (« Eve » ou « Lucas »).
+    /// Qui utilise cet appareil (« Eve » ou « Lucas »), choisi au premier
+    /// lancement puis dans Paramètres (`ui/moi.js`). Sert aussi de prénom aux
+    /// ajouts faits ici, aux cases cochées sur le widget et aux notifications.
     #[serde(default)]
     pub who: String,
     /// Identifiants des arrivées déjà signalées ici (seulement les récentes).
@@ -88,7 +90,7 @@ pub fn arrival_person(state: State<'_, Arc<AppState>>) -> String {
     load_settings(&state).who
 }
 
-/// Choisit qui porte ce téléphone (nom donné aux arrivées détectées ici).
+/// Choisit qui utilise cet appareil (nom donné aux arrivées détectées ici).
 #[tauri::command]
 pub fn set_arrival_person(state: State<'_, Arc<AppState>>, who: String) -> Result<(), String> {
     let who = who.trim();
