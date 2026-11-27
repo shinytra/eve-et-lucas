@@ -81,30 +81,26 @@
     showError("Android va te demander la position « en permanence » : choisis « Toujours autoriser », c'est ce qui permet de détecter ton arrivée appli fermée.");
   }
 
-  async function setup() {
-    $("home-phone").hidden = false;
+  async function showWho() {
     try {
-      const who = await invoke("arrival_person");
-      // Pas de choix par défaut : une arrivée au mauvais prénom ferait
-      // croire à l'autre que la mauvaise personne arrive.
-      if (who) $("home-who").value = who;
+      const who = (await invoke("arrival_person")).trim();
+      $("home-who").textContent = who
+        ? `Ce téléphone est celui de ${who} (modifiable dans Paramètres).`
+        : "Choisis d'abord à qui est ce téléphone, dans Paramètres.";
     } catch (e) {
       showError(String(e));
     }
+  }
+
+  async function setup() {
+    $("home-phone").hidden = false;
+    // Le prénom se choisit au premier lancement, puis dans Paramètres.
+    showWho();
+    $("author").addEventListener("change", showWho);
     try {
       $("home-ring").checked = localStorage.getItem("home-ring") === "1";
     } catch {}
     showState();
-
-    $("home-who").addEventListener("change", async () => {
-      showError(null);
-      if (!$("home-who").value) return;
-      try {
-        await invoke("set_arrival_person", { who: $("home-who").value });
-      } catch (e) {
-        showError(String(e));
-      }
-    });
 
     $("home-ring").addEventListener("change", async () => {
       showError(null);
@@ -125,8 +121,10 @@
       button.disabled = true;
       showError(null);
       try {
-        if (!$("home-who").value) {
-          throw new Error("Choisis d'abord à qui est ce téléphone.");
+        // Pas de prénom par défaut : une arrivée au mauvais prénom ferait
+        // croire à l'autre que la mauvaise personne arrive.
+        if (!(await invoke("arrival_person")).trim()) {
+          throw new Error("Choisis d'abord à qui est ce téléphone, dans Paramètres.");
         }
         await ensurePermissions();
         showError(null);

@@ -5,7 +5,7 @@ const $ = (id) => document.getElementById(id);
 const form = $("note-form");
 const titleInput = $("title");
 const bodyInput = $("body");
-const authorSelect = $("author");
+const authorSelect = $("author"); // prénom de cet appareil (moi.js)
 const saveButton = $("save");
 const cancelButton = $("cancel");
 const errorBox = $("error");
@@ -23,19 +23,6 @@ if (!invoke) {
   showError("Interface Tauri indisponible : ouvre l'appli Eve & Lucas, pas le fichier dans un navigateur.");
   throw new Error("window.__TAURI__ absent");
 }
-
-// Le prénom choisi est mémorisé sur cet appareil (simple confort : si le
-// stockage local est indisponible, on garde le premier prénom de la liste).
-try {
-  const saved = localStorage.getItem("author");
-  if (saved) authorSelect.value = saved;
-} catch {}
-if (authorSelect.selectedIndex < 0) authorSelect.selectedIndex = 0;
-authorSelect.addEventListener("change", () => {
-  try {
-    localStorage.setItem("author", authorSelect.value);
-  } catch {}
-});
 
 function formatDate(ms) {
   return new Date(ms).toLocaleString("fr-FR", {

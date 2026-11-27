@@ -404,33 +404,6 @@ select {
   cursor: pointer;
 }
 
-.who {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.9rem;
-  color: var(--muted);
-}
-
-.who select {
-  width: auto;
-  padding: 7px 28px 7px 12px;
-  border-radius: 999px;
-  color: var(--text);
-  background-position: right 10px center;
-}
-
-/* Sur un petit téléphone, « Je suis » laisse la place au titre. */
-@media (max-width: 420px) {
-  .who span {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-}
-
 form {
   display: grid;
   gap: calc(var(--gap) * 0.6);
@@ -2327,4 +2300,173 @@ main > section.entree {
   display: grid;
   gap: 2px;
   min-width: 0;
+}
+
+/* ---------- Qui utilise cet appareil (moi.js) ---------- */
+
+/* Pastille de l'en-tête : l'initiale, mène aux Paramètres. */
+.moi-pastille {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--accent-text);
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 0.15s var(--ressort);
+}
+
+.moi-pastille:active {
+  transform: scale(0.92);
+}
+
+/* Deux grandes cartes « Lucas » / « Eve » (Paramètres et Bienvenue). */
+.choix-moi {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.choix-moi button {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 16px 8px;
+  border-radius: calc(var(--radius) * 0.7);
+  background: var(--field-bg);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
+  transition: transform 0.15s var(--ressort), box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.choix-moi .initiale {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--text);
+  font-size: 1.4rem;
+  font-weight: 700;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.choix-moi button[aria-checked="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.choix-moi button[aria-checked="true"] .initiale {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: var(--accent-text);
+  animation: icone-saut 0.4s var(--ressort);
+}
+
+.params {
+  display: grid;
+  gap: 12px;
+}
+
+.params h3 {
+  margin: 8px 0 0;
+  font-size: 1rem;
+}
+
+.params .meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+#moi-error,
+#bienvenue-error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.liens-reglages {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.liens-reglages a,
+.liens-reglages button {
+  display: block;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) * 0.6);
+  background: var(--field-bg);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+
+/* Fenêtre du premier lancement : tout l'écran, rien d'autre n'est cliquable. */
+.bienvenue {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: calc(16px + var(--haut)) 16px calc(16px + var(--bas));
+  background: rgba(10, 12, 25, 0.35);
+  animation: fondu 0.3s ease;
+}
+
+.bienvenue[hidden] {
+  display: none;
+}
+
+.bienvenue.sortie {
+  animation: fondu 0.25s ease reverse forwards;
+}
+
+.bienvenue-corps {
+  width: min(440px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 24px 18px 20px;
+  background-color: var(--glass-solid);
+  text-align: center;
+  animation: feuille-entree 0.45s var(--ressort);
+}
+
+.bienvenue-corps:focus {
+  outline: none;
+}
+
+.bienvenue-corps h2 {
+  margin: 0;
+}
+
+.bienvenue-corps .meta {
+  margin: 0;
+  color: var(--muted);
+}
+
+.bienvenue-coeur {
+  margin: 0;
+  font-size: 2.6rem;
+  /* 15 images par seconde (batterie), seulement au premier lancement. */
+  animation: battement 1.2s steps(18) infinite;
+}
+
+@keyframes battement {
+  15%,
+  45% {
+    transform: scale(1.14);
+  }
+  30% {
+    transform: scale(1);
+  }
+}
+
+body.bienvenue-ouverte {
+  overflow: hidden;
 }

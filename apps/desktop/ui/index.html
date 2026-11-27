@@ -60,6 +60,10 @@
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm0 3v13h8V5Z" /></svg>
           <span>Appareils</span>
         </a>
+        <a href="#parametres" data-ecran="parametres" class="secondaire">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.5 7.5 0 0 0-1.7-1L14.9 3h-4l-.4 2.9a7.5 7.5 0 0 0-1.7 1l-2.5-1-2 3.5L6.4 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.9h4l.4-2.9c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5ZM12.9 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" /></svg>
+          <span>Paramètres</span>
+        </a>
         <button type="button" id="nav-plus" class="nav-plus" aria-expanded="false" aria-controls="plus">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M4 4h7v7H4Zm9 0h7v7h-7ZM4 13h7v7H4Zm9 0h7v7h-7Z" /></svg>
           <span>Plus</span>
@@ -70,13 +74,10 @@
     <header class="verre barre">
       <h1 id="titre-ecran">Eve &amp; Lucas</h1>
       <div class="barre-actions">
-        <label class="who">
-          <span>Je suis</span>
-          <select id="author">
-            <option>Lucas</option>
-            <option>Eve</option>
-          </select>
-        </label>
+        <!-- Qui utilise cet appareil (moi.js) : choisi au premier lancement,
+             modifiable dans Paramètres. Les autres écrans lisent #author. -->
+        <input type="hidden" id="author" value="Lucas" />
+        <a href="#parametres" id="moi-pastille" class="moi-pastille" aria-label="Paramètres : je suis Lucas" title="Je suis Lucas">L</a>
         <button
           type="button"
           id="open-settings"
@@ -251,14 +252,7 @@
         <h2 id="home-title">Arrivée à la maison</h2>
         <p class="meta">Quand l'un de vous approche de la maison, son téléphone prévient les autres appareils, qui sonnent. Pour qu'ils sonnent même appli fermée, installe l'appli ntfy (Play Store ou F-Droid) sur chaque téléphone : le message passe par ntfy.sh, chiffré, et le PC l'écoute aussi.</p>
         <div id="home-phone" hidden>
-          <label>
-            Ce téléphone est celui de
-            <select id="home-who">
-              <option value="">Choisir…</option>
-              <option>Lucas</option>
-              <option>Eve</option>
-            </select>
-          </label>
+          <p id="home-who" class="meta"></p>
           <p id="home-state" class="meta"></p>
           <label class="check">
             <input id="home-ring" type="checkbox" />
@@ -276,9 +270,27 @@
       <section id="ecran-notifications" data-ecran="notifications" aria-labelledby="notif-title" class="notifs verre">
         <h2 id="notif-title">Notifications</h2>
         <p class="meta">Choisis ce qui te prévient sur cet appareil quand l'autre ajoute ou fait quelque chose. Chaque appareil a ses propres réglages. Sur téléphone, il faut l'appli ntfy pour être prévenu même appli fermée (comme pour l'arrivée à la maison).</p>
-        <p id="notif-owner" class="meta" hidden>Choisis à qui est ce téléphone dans <a href="#maison">Arrivée à la maison</a> : tu ne seras plus prévenu de ce que tu ajoutes toi-même depuis le PC.</p>
+        <p id="notif-owner" class="meta" hidden>Choisis à qui est ce téléphone dans <a href="#parametres">Paramètres</a> : tu ne seras plus prévenu de ce que tu ajoutes toi-même depuis le PC.</p>
         <p id="notif-error" role="alert" hidden></p>
         <ul id="notif-list"></ul>
+      </section>
+
+      <section id="ecran-parametres" data-ecran="parametres" aria-labelledby="params-title" class="params verre">
+        <h2 id="params-title">Paramètres</h2>
+        <h3>Qui utilise cet appareil ?</h3>
+        <p class="meta">Ton prénom signe ce que tu ajoutes, nomme tes arrivées à la maison et t'évite d'être prévenu de ce que tu fais toi-même. Ce choix ne concerne que cet appareil.</p>
+        <div class="choix-moi" role="radiogroup" aria-label="Je suis">
+          <button type="button" role="radio" data-moi="Lucas" aria-checked="false"><span class="initiale" aria-hidden="true">L</span>Lucas</button>
+          <button type="button" role="radio" data-moi="Eve" aria-checked="false"><span class="initiale" aria-hidden="true">E</span>Eve</button>
+        </div>
+        <p id="moi-error" role="alert" hidden></p>
+        <h3>Autres réglages</h3>
+        <div class="liens-reglages">
+          <button type="button" id="params-apparence">Apparence</button>
+          <a href="#notifications">Notifications</a>
+          <a href="#maison">Arrivée à la maison</a>
+          <a href="#appareils">Appareils</a>
+        </div>
       </section>
 
       <section id="ecran-fichiers" data-ecran="fichiers" aria-labelledby="files-title" class="files verre">
@@ -361,6 +373,10 @@
             <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm0 3v13h8V5Z" /></svg>
             <span>Appareils</span>
           </a>
+          <a href="#parametres" class="tuile">
+            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.5 7.5 0 0 0-1.7-1L14.9 3h-4l-.4 2.9a7.5 7.5 0 0 0-1.7 1l-2.5-1-2 3.5L6.4 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1l.4 2.9h4l.4-2.9c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5ZM12.9 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" /></svg>
+            <span>Paramètres</span>
+          </a>
           <button type="button" id="plus-apparence" class="tuile">
             <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 0 0 0 18c1.1 0 1.8-.8 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8h2.1A4.3 4.3 0 0 0 21 10.7C21 6.4 17 3 12 3Zm-5.5 9a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z" /></svg>
             <span>Apparence</span>
@@ -431,7 +447,22 @@
       </div>
     </aside>
 
+    <!-- Premier lancement : qui utilise cet appareil (moi.js). -->
+    <div id="bienvenue" class="bienvenue" hidden>
+      <div class="bienvenue-corps verre" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="bienvenue-titre">
+        <p class="bienvenue-coeur" aria-hidden="true">💞</p>
+        <h2 id="bienvenue-titre">Bienvenue dans Eve &amp; Lucas</h2>
+        <p class="meta">Qui utilise cet appareil ? Tu pourras changer ce choix plus tard dans Paramètres.</p>
+        <div class="choix-moi" role="radiogroup" aria-label="Je suis">
+          <button type="button" role="radio" data-moi="Lucas" aria-checked="false"><span class="initiale" aria-hidden="true">L</span>Je suis Lucas</button>
+          <button type="button" role="radio" data-moi="Eve" aria-checked="false"><span class="initiale" aria-hidden="true">E</span>Je suis Eve</button>
+        </div>
+        <p id="bienvenue-error" role="alert" hidden></p>
+      </div>
+    </div>
+
     <script src="nav.js"></script>
+    <script src="moi.js"></script>
     <script src="main.js"></script>
     <script src="tasks.js"></script>
     <script src="animes.js"></script>
