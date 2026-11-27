@@ -157,7 +157,8 @@
   function renderLieu(presences) {
     const carte = $("accueil-arrivee");
     const moi = $("author").value.trim().toLowerCase();
-    const autre = presences.find((p) => p.who.trim().toLowerCase() !== moi);
+    // Prénom pas encore choisi : impossible de savoir qui est « l'autre ».
+    const autre = moi ? presences.find((p) => p.who.trim().toLowerCase() !== moi) : null;
     if (autre) {
       const ou = !autre.inside ? "ailleurs" : autre.place || "à la maison";
       carte.hidden = false;
@@ -225,6 +226,7 @@
       salut();
       if (dernierEtat) renderSynchro(dernierEtat);
       // Chaque carte se remplit même si une autre source échoue.
+      derniereArrivee = null;
       const sources = [
         ["list_dates", renderDate],
         ["list_tasks", renderTaches],

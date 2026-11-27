@@ -285,11 +285,15 @@
         <ul id="presence" class="presence" aria-label="Où est chacun"></ul>
         <p id="presence-empty" class="meta" hidden>Personne n'a encore enregistré de lieu.</p>
         <div id="home-phone" hidden>
-          <h3>Mes lieux</h3>
+          <div class="ecran-tete">
+            <h3>Mes lieux</h3>
+            <button type="button" class="ajouter principal" data-form="place-form" aria-expanded="false" aria-controls="place-form">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6Z" /></svg>
+              <span>Nouveau lieu</span>
+            </button>
+          </div>
           <p id="home-who" class="meta"></p>
-          <ul id="places" class="places"></ul>
-          <p id="places-empty" class="meta" hidden>Aucun lieu enregistré sur ce téléphone.</p>
-          <form id="place-form" class="place-form" novalidate>
+          <form id="place-form" class="repliable place-form" autocomplete="off" novalidate>
             <label>
               Nom du lieu
               <input id="place-name" maxlength="40" autocomplete="off" placeholder="Maison, Université, Chez Eve 2…" />
@@ -307,8 +311,13 @@
               <input id="place-announce" type="checkbox" checked />
               Faire sonner les autres quand j'arrive ici
             </label>
-            <button type="submit" id="place-add">Je suis ici : ajouter ce lieu</button>
+            <div class="actions">
+              <button type="button" id="place-cancel">Annuler</button>
+              <button type="submit" id="place-add">Je suis ici : ajouter ce lieu</button>
+            </div>
           </form>
+          <ul id="places" class="places"></ul>
+          <p id="places-empty" class="meta" hidden>Aucun lieu enregistré sur ce téléphone.</p>
           <label class="check">
             <input id="home-ring" type="checkbox" />
             Sonner aussi sur ce téléphone en arrivant

@@ -19,11 +19,14 @@ use tauri::AppHandle;
 use crate::store::{AppState, ARRIVALS_DOC, PUSH_DOC};
 
 /// Ajoute une présence reçue par ntfy (entrée dans un lieu ou sortie). Mêmes
-/// règles qu'[`accept`], sans limite d'âge : la plus récente l'emporte de
-/// toute façon. `Ok(false)` : appareil pas encore connu, à garder.
+/// règles qu'[`accept`], sans limite d'âge (la plus récente l'emporte de
+/// toute façon) et avec la tolérance d'horloge du cœur. `Ok(false)` :
+/// appareil pas encore connu, à garder.
 pub(crate) fn accept_presence(state: &AppState, event: &PresenceEvent) -> Result<bool, String> {
     let now = crate::now_ms();
-    if event.device == state.self_id.to_string() || event.at > now + 60_000 {
+    if event.device == state.self_id.to_string()
+        || event.at > now + couple_core::presence::FUTURE_TOLERANCE_MS
+    {
         return Ok(true);
     }
     let known = state
@@ -600,13 +603,18 @@ pub(crate) mod phone {
                 device: r.device,
                 at: r.at,
             };
+            // Arrivée d'une ancienne version (sans lieu) : pas de présence,
+            // aucune sortie ne viendrait la corriger.
+            let legacy = r.kind == "arrival" && presence.place.is_empty();
             // Le téléphone a déjà sonné en recevant le message.
             let result = if r.kind == "arrival" {
                 super::accept(state, arrival, true)
             } else {
                 Ok(true)
             };
-            match result.and_then(|ok| Ok(ok && super::accept_presence(state, &presence)?)) {
+            match result
+                .and_then(|ok| Ok(ok && (legacy || super::accept_presence(state, &presence)?)))
+            {
                 Ok(true) => ids.push(id),
                 // Gardée par Android : reprise quand l'appareil sera connu
                 // (au-delà de 15 min, elle sera simplement oubliée).

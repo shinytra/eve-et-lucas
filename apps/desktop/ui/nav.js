@@ -165,7 +165,8 @@
     const section = ecrans.find((s) => s.dataset.ecran === actuel);
     const bouton = section?.querySelector(".ajouter");
     const form = bouton?.dataset.form ? $(bouton.dataset.form) : null;
-    fab.hidden = !bouton || !!form?.classList.contains("ouvert");
+    // Un bouton dans un bloc caché (lieux : téléphone seulement) ne compte pas.
+    fab.hidden = !bouton || !!bouton.closest("[hidden]") || !!form?.classList.contains("ouvert");
     if (bouton) fab.setAttribute("aria-label", bouton.textContent.trim());
   }
 

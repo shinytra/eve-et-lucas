@@ -29,7 +29,7 @@ pub const MAX_PLACE_NAME: usize = 40;
 pub const KEEP_MS: i64 = 7 * 24 * 60 * 60 * 1000;
 /// Un évènement daté plus loin que ça dans le futur (horloge déréglée) est
 /// ignoré : il bloquerait les suivants.
-const FUTURE_TOLERANCE_MS: i64 = 10 * 60 * 1000;
+pub const FUTURE_TOLERANCE_MS: i64 = 10 * 60 * 1000;
 
 /// Une entrée dans un lieu ou une sortie de tous ses lieux.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hydrate, Reconcile)]

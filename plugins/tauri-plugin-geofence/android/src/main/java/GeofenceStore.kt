@@ -303,6 +303,23 @@ object GeofenceStore {
     return event
   }
 
+  /**
+   * Note à nouveau le lieu actuel (renommé), s'il s'agit de [id] : simple
+   * présence, sans sonnerie. `null` si l'on n'y est pas.
+   */
+  @Synchronized
+  fun recordCurrent(context: Context, at: Long, id: String): PendingArrival? {
+    val p = prefs(context)
+    if (insideIds(context).lastOrNull() != id) return null
+    val place = places(context).firstOrNull { it.id == id } ?: return null
+    val event = PendingArrival(UUID.randomUUID().toString(), at, KIND_PRESENCE, true, place.name, place.kind)
+    val arrivals = readArrivals(p)
+    arrivals.add(event)
+    while (arrivals.size > MAX_ARRIVALS) arrivals.removeAt(0)
+    p.edit().putString(KEY_ARRIVALS, arrivalsJson(arrivals)).commit()
+    return event
+  }
+
   /** Renvoie les arrivées enregistrées, sans les effacer. */
   @Synchronized
   fun peekArrivals(context: Context): List<PendingArrival> = readArrivals(prefs(context))
@@ -374,7 +391,6 @@ object GeofenceStore {
       .put("inside", a.inside)
       .put("place", a.place)
       .put("placeKind", a.placeKind)
-  }
 
   // --- Réveil par ntfy ---------------------------------------------------
 

@@ -232,13 +232,15 @@ impl PushMessage {
     }
 
     /// Où en est la personne, si le message est une arrivée ou une présence
-    /// (version 1). Une arrivée d'avant les lieux nommés : à la maison.
+    /// (version 1). Une arrivée sans lieu vient d'une ancienne version, qui
+    /// n'annonce jamais les sorties : ce n'est pas une présence (elle
+    /// resterait « à la maison » pour toujours).
     pub fn presence(&self) -> Option<PresenceEvent> {
         if self.v != 1 || self.who.trim().is_empty() {
             return None;
         }
         let inside = match self.kind.as_str() {
-            "arrival" => true,
+            "arrival" if !self.place.trim().is_empty() => true,
             "presence" => self.inside?,
             _ => return None,
         };
@@ -346,9 +348,8 @@ mod tests {
         assert!(p.inside);
         assert_eq!(p.place, "Maison 2");
         assert!(arrival.into_arrival().is_some());
-        // Ancienne arrivée, sans lieu : à la maison.
-        let p = message().presence().unwrap();
-        assert!(p.inside && p.place.is_empty());
+        // Ancienne version, sans lieu : pas de présence (pas de sortie à venir).
+        assert!(message().presence().is_none());
         // Présence sans « inside », ou nouveauté : rien.
         let mut odd = message();
         odd.kind = "presence".into();

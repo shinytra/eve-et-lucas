@@ -232,7 +232,11 @@ object ArrivalPayload {
       true
     }
     val place = cleanPlace(json.opt("place") as? String ?: "")
-    val placeKind = (json.opt("place_kind") as? String)?.takeIf { it in PlaceKinds.ALL } ?: ""
+    // Type inconnu (version plus récente) : « autre », comme dans le cœur Rust.
+    val placeKind = when (val k = json.opt("place_kind") as? String ?: "") {
+      "", in PlaceKinds.ALL -> k
+      else -> "autre"
+    }
     return ArrivalMessage(id, who, device, at, kind, inside, place, placeKind)
   }
 }

@@ -114,10 +114,6 @@ class PushReceiverService : PushService() {
       Log.w(TAG, "Message ntfy ignoré : c'est notre propre arrivée")
       return
     }
-    if (config.devices.isNotEmpty() && arrival.device !in config.devices) {
-      Log.w(TAG, "Message ntfy ignoré : appareil qui n'est plus appairé")
-      return
-    }
     if (arrival.kind == KIND_PRESENCE) {
       handlePresence(arrival)
       return

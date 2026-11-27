@@ -216,32 +216,44 @@ class GeofencePlugin(private val activity: Activity) : Plugin(activity) {
   fun renamePlace(invoke: Invoke) {
     val args = invoke.parseArgs(RenamePlaceArgs::class.java)
     val name = args.name.orEmpty().trim()
-    if (name.isEmpty() || !GeofenceStore.renamePlace(activity, args.id.orEmpty(), name)) {
+    val id = args.id.orEmpty()
+    if (name.isEmpty() || !GeofenceStore.renamePlace(activity, id, name)) {
       invoke.reject("Ce lieu n'existe plus.")
       return
     }
+    // On y est : les autres voient le nouveau nom tout de suite.
+    GeofenceStore.recordCurrent(activity, System.currentTimeMillis(), id)?.let { announce(it) }
     invoke.resolve()
   }
 
-  /** Retire un lieu ; si l'on y était, les autres apprennent qu'on n'y est plus. */
+  /**
+   * Retire un lieu ; si l'on y était, les autres apprennent qu'on n'y est
+   * plus. Retiré aussi quand Android refuse d'effacer la zone (localisation
+   * coupée…) : une zone restée chez Android n'a plus de lieu, ses entrées
+   * sont ignorées.
+   */
   @Command
   fun removePlace(invoke: Invoke) {
     val id = invoke.parseArgs(PlaceIdArgs::class.java).id.orEmpty()
+    val forget = {
+      GeofenceStore.recordTransition(
+        activity,
+        System.currentTimeMillis(),
+        emptyList(),
+        listOf(id),
+        allowArrival = false
+      )?.let { announce(it) }
+      GeofenceStore.removePlace(activity, id)
+      invoke.resolve()
+    }
     GeofenceRegistrar.unregister(
       activity,
       listOf(id),
-      onSuccess = {
-        GeofenceStore.recordTransition(
-          activity,
-          System.currentTimeMillis(),
-          emptyList(),
-          listOf(id),
-          allowArrival = false
-        )?.let { announce(it) }
-        GeofenceStore.removePlace(activity, id)
-        invoke.resolve()
-      },
-      onError = { message -> invoke.reject(message) }
+      onSuccess = { forget() },
+      onError = { message ->
+        android.util.Log.w(TAG, "Zone non effacée par Android : $message")
+        forget()
+      }
     )
   }
 

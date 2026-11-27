@@ -323,7 +323,16 @@ mod phone {
                 place: pending.place.clone(),
                 place_kind: pending.place_kind.clone(),
             };
-            match arrival.and_then(|()| super::record_presence(state, &presence)) {
+            // Arrivée notée avant la mise à jour (sans lieu) : pas de présence,
+            // aucune sortie ne viendrait la corriger.
+            let legacy = pending.kind == "arrival" && pending.place.is_empty();
+            match arrival.and_then(|()| {
+                if legacy {
+                    Ok(false)
+                } else {
+                    super::record_presence(state, &presence)
+                }
+            }) {
                 Ok(_) => saved.push(pending.id),
                 Err(e) => {
                     // Android les garde : nouvel essai au prochain évènement

@@ -168,6 +168,8 @@
 
   async function setup() {
     $("home-phone").hidden = false;
+    // Le « + » flottant tient compte du bloc maintenant visible.
+    window.__ui.fermer($("place-form"));
     // Le prénom se choisit au premier lancement, puis dans Paramètres.
     showWho();
     $("author").addEventListener("change", () => {
@@ -191,6 +193,11 @@
         $("home-ring").checked = !ring;
         showError(String(e));
       }
+    });
+
+    $("place-cancel").addEventListener("click", () => {
+      $("place-name").value = "";
+      window.__ui.fermer($("place-form"));
     });
 
     // Une maison sonne d'office, un autre lieu non (modifiable).
@@ -223,6 +230,7 @@
           radiusM: RADIUS_M,
         });
         $("place-name").value = "";
+        window.__ui.fermer($("place-form"));
         await refreshPlaces();
       } catch (e) {
         showError(String(e?.message ?? e));
