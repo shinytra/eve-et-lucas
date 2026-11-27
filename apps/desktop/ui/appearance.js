@@ -66,7 +66,7 @@
       "--border-width": `${a.border_width}px`,
       "--border-color": rgba("#ffffff", (a.border_opacity / 100) * (dark ? 0.6 : 1)),
       "--radius": `${a.radius}px`,
-      "--shadow": a.shadow ? `0 ${4 + a.shadow / 10}px ${16 + a.shadow / 3}px rgba(0, 0, 0, ${shadowAlpha.toFixed(3)})` : "none",
+      "--shadow": a.shadow ? `0 ${4 + a.shadow / 10}px ${16 + a.shadow / 3}px rgba(0, 0, 0, ${shadowAlpha.toFixed(3)})` : "0 0 0 transparent", // jamais « none » : style.css y ajoute un liseré
       "--shine": a.shine
         ? `linear-gradient(135deg, rgba(255, 255, 255, ${dark ? 0.12 : 0.45}), rgba(255, 255, 255, 0) 45%)`
         : "none",
@@ -153,6 +153,7 @@
   function replacing(command, args) {
     clearTimeout(saveTimer);
     saveTimer = null;
+    notice = null;
     return write(command, args);
   }
   let view = null; // { current, saved, presets, limits }
@@ -190,6 +191,7 @@
   function replace(appearance, message) {
     clearTimeout(saveTimer);
     saveTimer = null;
+    notice = null;
     current = appearance;
     apply(current);
     cache(current);
@@ -375,7 +377,8 @@
     );
     controls.push(() => {
       imageColors.checked = Boolean(current.image_colors);
-      imageColorsRow.hidden = !wallpaperImage;
+      // Seulement avec le fond « Mon image » : l'option choisit ce fond.
+      imageColorsRow.hidden = !wallpaperImage || current.wallpaper !== "image";
     });
     const fromImage = el("p", { class: "aide" }, "Ces couleurs viennent de ton image de fond (onglet Fond). En choisir une autre désactive l'option.");
     controls.push(() => (fromImage.hidden = !current.image_colors));
@@ -445,8 +448,7 @@
     }
     refreshControls();
     // Nouvelle image avec l'option active : on recalcule ses couleurs.
-    if (dataUrl && current.image_colors) await adaptToImage();
-    else changed();
+    if (!(dataUrl && current.image_colors && (await adaptToImage()))) changed();
   }
 
   // Image réduite (96 px de côté au plus) en octets RVB et base64, pour le
@@ -478,16 +480,19 @@
     });
   }
 
+  // Renvoie `true` si les couleurs de l'image sont appliquées.
   async function adaptToImage() {
-    if (!wallpaperImage) return;
+    if (!wallpaperImage) return false;
     status("Analyse de l'image…");
     try {
       const sample = await sampleImage(wallpaperImage);
       await flush();
       replace(await replacing("adapt_to_image", sample), "Couleurs tirées de ton image");
+      return true;
     } catch (e) {
       status(String(e?.message ?? e), true);
       refreshControls();
+      return false;
     }
   }
 
@@ -579,6 +584,9 @@
               onclick: async () => {
                 try {
                   replace(await replacing("apply_saved_theme", { id: t.id }), `Thème « ${t.name} » appliqué`);
+                  // Thème enregistré avec les couleurs d'une image : on les
+                  // reprend de l'image actuelle.
+                  if (current.image_colors) await adaptToImage();
                 } catch (e) {
                   status(String(e), true);
                 }

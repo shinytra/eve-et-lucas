@@ -1,7 +1,8 @@
 //! Couleurs de l'appli tirées de l'image de fond (dans l'esprit de
 //! « Material You » sur Android).
 //!
-//! L'interface réduit l'image (128 px de côté au plus) et envoie ses pixels ;
+//! L'interface réduit l'image (96 px de côté ; le cœur accepte jusqu'à
+//! [`MAX_SAMPLE_SIDE`]) et envoie ses pixels ;
 //! le cœur en tire :
 //! - les couleurs dominantes (k-moyennes dans l'espace OKLab, où les
 //!   distances suivent ce que l'œil perçoit) ;
@@ -239,6 +240,45 @@ struct Analysis {
     mean_chroma: f32,
     /// Clarté moyenne (OKLab).
     mean_lightness: f32,
+    /// Zones les plus sombre et la plus claire de l'image floutée comme
+    /// derrière le verre (1er et 99e centiles de luminance) : un petit soleil
+    /// très clair ne compte pas parmi les couleurs dominantes mais doit
+    /// rester lisible.
+    extremes: [[f32; 3]; 2],
+}
+
+/// Rayon du flou (en pixels de l'échantillon) qui imite celui du verre :
+/// environ 24 px d'écran pour un échantillon de 96 px.
+const BLUR_RADIUS: usize = 2;
+
+/// Pixels les plus sombre et le plus clair de l'image floutée (centiles 1 et
+/// 99), en sRGB avec gamma comme le flou du navigateur.
+fn extremes(sample: &ImageSample) -> [[f32; 3]; 2] {
+    let (w, h) = (sample.width, sample.height);
+    let r = BLUR_RADIUS as isize;
+    let mut blurred: Vec<[f32; 3]> = Vec::with_capacity(w * h);
+    for y in 0..h as isize {
+        for x in 0..w as isize {
+            let (mut sum, mut n) = ([0.0f32; 3], 0.0f32);
+            for dy in -r..=r {
+                for dx in -r..=r {
+                    let (xx, yy) = (x + dx, y + dy);
+                    if (0..w as isize).contains(&xx) && (0..h as isize).contains(&yy) {
+                        let p = sample.pixels[yy as usize * w + xx as usize];
+                        for i in 0..3 {
+                            sum[i] += f32::from(p[i]) / 255.0;
+                        }
+                        n += 1.0;
+                    }
+                }
+            }
+            blurred.push(sum.map(|c| c / n));
+        }
+    }
+    blurred.sort_by(|a, b| luminance(*a).total_cmp(&luminance(*b)));
+    let last = blurred.len() - 1;
+    let at = |q: f32| blurred[((last as f32) * q).round() as usize];
+    [at(0.01), at(0.99)]
 }
 
 fn analyze(sample: &ImageSample) -> Analysis {
@@ -274,7 +314,21 @@ fn analyze(sample: &ImageSample) -> Analysis {
         busyness,
         mean_chroma,
         mean_lightness,
+        extremes: extremes(sample),
     }
+}
+
+/// Ce qu'on peut voir derrière le verre : les couleurs dominantes et les
+/// zones extrêmes de l'image.
+fn backgrounds(analysis: &Analysis) -> Vec<[f32; 3]> {
+    let mut out: Vec<[f32; 3]> = analysis
+        .swatches
+        .iter()
+        .filter(|s| s.share >= MIN_SHARE)
+        .map(|s| s.rgb)
+        .collect();
+    out.extend(analysis.extremes);
+    out
 }
 
 /// Couleurs dominantes par k-moyennes. Départ déterministe : les cases les
@@ -404,45 +458,47 @@ impl Tone {
         }
     }
 
-    /// Opacité du verre (en %) juste suffisante pour lire le texte atténué
-    /// au-dessus de chaque couleur importante de l'image (assombrie par le
-    /// voile du fond). Le flou du verre mélange les détails : les couleurs
-    /// dominantes représentent bien ce qu'on voit derrière.
-    fn opacity(&self, swatches: &[Swatch]) -> u16 {
-        let backgrounds: Vec<[f32; 3]> = swatches
+    /// Verre tel qu'il s'affiche au-dessus de chaque fond (image assombrie
+    /// par le voile, puis teinte du verre à l'opacité `op`).
+    fn glasses(&self, op: u16, backgrounds: &[[f32; 3]]) -> Vec<[f32; 3]> {
+        let (dim, alpha) = (f32::from(self.dim) / 100.0, f32::from(op) / 100.0);
+        backgrounds
             .iter()
-            .filter(|s| s.share >= MIN_SHARE)
-            .map(|s| over([0.0; 3], f32::from(self.dim) / 100.0, s.rgb))
-            .collect();
+            .map(|bg| over(self.tint, alpha, over([0.0; 3], dim, *bg)))
+            .collect()
+    }
+
+    /// Opacité du verre (en %) juste suffisante pour lire le texte et le
+    /// texte atténué au-dessus de tout ce qu'on voit derrière.
+    fn opacity(&self, backgrounds: &[[f32; 3]]) -> u16 {
         (self.floor..=MAX_OPACITY)
             .find(|op| {
-                let alpha = f32::from(*op) / 100.0;
-                backgrounds.iter().all(|bg| {
-                    let glass = over(self.tint, alpha, *bg);
-                    let muted = over(self.text, MUTED_ALPHA, glass);
-                    contrast(self.text, glass) >= TEXT_CONTRAST
-                        && contrast(muted, glass) >= MUTED_CONTRAST
+                self.glasses(*op, backgrounds).iter().all(|glass| {
+                    let muted = over(self.text, MUTED_ALPHA, *glass);
+                    contrast(self.text, *glass) >= TEXT_CONTRAST
+                        && contrast(muted, *glass) >= MUTED_CONTRAST
                 })
             })
             .unwrap_or(MAX_OPACITY)
     }
 }
 
-/// Couleur d'accent lisible sur le verre : même teinte, clarté ajustée
-/// jusqu'à un contraste de 4,5 avec la teinte du verre.
-fn accent(hue: f32, chroma: f32, tone: &Tone) -> [f32; 3] {
+/// Couleur d'accent lisible (contraste 4,5) sur le verre tel qu'il
+/// s'affiche : même teinte, clarté la plus proche de celle voulue qui
+/// convient ; à défaut, la couleur du texte (toujours lisible).
+fn accent(hue: f32, chroma: f32, tone: &Tone, glasses: &[[f32; 3]]) -> [f32; 3] {
     let chroma = chroma.clamp(0.09, 0.19);
-    let (mut l, step) = if tone.dark {
-        (0.78, 0.02)
-    } else {
-        (0.55, -0.02)
-    };
-    let mut rgb = lch_to_srgb(l, chroma, hue);
-    while contrast(rgb, tone.tint) < MIN_CONTRAST && (0.2..=0.95).contains(&l) {
+    let (start, step) = if tone.dark { (78, 1) } else { (55, -1) };
+    let readable = |rgb: [f32; 3]| glasses.iter().all(|g| contrast(rgb, *g) >= MIN_CONTRAST);
+    let mut l: i32 = start;
+    while (5..=98).contains(&l) {
+        let rgb = rounded(lch_to_srgb(l as f32 / 100.0, chroma, hue));
+        if readable(rgb) {
+            return rgb;
+        }
         l += step;
-        rgb = lch_to_srgb(l, chroma, hue);
     }
-    rgb
+    tone.text
 }
 
 impl Appearance {
@@ -488,7 +544,8 @@ impl Appearance {
         // égalité, celui qui va avec l'image (sombre pour une image sombre).
         let light = Tone::new(false, hue, chroma);
         let dark = Tone::new(true, hue, chroma);
-        let (op_light, op_dark) = (light.opacity(&main), dark.opacity(&main));
+        let behind = backgrounds(&analysis);
+        let (op_light, op_dark) = (light.opacity(&behind), dark.opacity(&behind));
         let prefer_dark = analysis.mean_lightness < 0.62;
         let (tone, opacity) = match op_dark.cmp(&op_light) {
             std::cmp::Ordering::Less => (dark, op_dark),
@@ -503,9 +560,10 @@ impl Appearance {
             wall.push(last);
         }
 
+        let glasses = tone.glasses(opacity, &behind);
         let mut a = self.clone();
-        a.accent = hex(accent(hue, chroma, &tone));
-        a.accent2 = hex(accent(hue2, chroma2, &tone));
+        a.accent = hex(accent(hue, chroma, &tone, &glasses));
+        a.accent2 = hex(accent(hue2, chroma2, &tone, &glasses));
         a.text = hex(tone.text);
         a.glass_tint = hex(tone.tint);
         a.glass_opacity = opacity;
@@ -569,25 +627,30 @@ mod tests {
         let analysis = analyze(sample);
         let tint = from_hex(&a.glass_tint).unwrap();
         let text = from_hex(&a.text).unwrap();
+        let accents = [from_hex(&a.accent).unwrap(), from_hex(&a.accent2).unwrap()];
         let alpha = f32::from(a.glass_opacity) / 100.0;
-        for s in analysis.swatches.iter().filter(|s| s.share >= MIN_SHARE) {
-            let bg = over([0.0; 3], f32::from(a.wallpaper_dim) / 100.0, s.rgb);
-            let glass = over(tint, alpha, bg);
+        assert!(a.glass_opacity < MAX_OPACITY, "verre au maximum : {a:?}");
+        for bg in backgrounds(&analysis) {
+            let bg_dim = over([0.0; 3], f32::from(a.wallpaper_dim) / 100.0, bg);
+            let glass = over(tint, alpha, bg_dim);
             let muted = over(text, MUTED_ALPHA, glass);
-            assert!(
-                a.glass_opacity < MAX_OPACITY,
-                "verre au maximum sur {} : {a:?}",
-                hex(s.rgb)
-            );
             assert!(
                 contrast(muted, glass) >= MUTED_CONTRAST,
                 "texte atténué illisible sur {} : {a:?}",
-                hex(s.rgb)
+                hex(bg)
             );
             assert!(
                 contrast(text, glass) >= TEXT_CONTRAST,
                 "texte illisible : {a:?}"
             );
+            for c in accents {
+                assert!(
+                    contrast(c, glass) >= MIN_CONTRAST,
+                    "accent {} illisible sur {} : {a:?}",
+                    hex(c),
+                    hex(bg)
+                );
+            }
         }
     }
 
@@ -670,9 +733,9 @@ mod tests {
         assert!(lab_of(&a.glass_tint).l > 0.9);
         assert!(lab_of(&a.text).l < 0.4);
         assert_readable(&a, &sample);
-        // Accent assez foncé pour se lire sur le verre clair.
+        // Accent assez foncé pour se lire sur le verre clair (vérifié aussi
+        // sur le verre réel par `assert_readable`).
         assert!(contrast_ratio(&a.accent, &a.glass_tint).unwrap() >= MIN_CONTRAST);
-        assert!(contrast_ratio(&a.accent2, &a.glass_tint).unwrap() >= MIN_CONTRAST);
     }
 
     #[test]
@@ -685,6 +748,24 @@ mod tests {
         assert!(a.glass_opacity > b.glass_opacity + 20, "{a:?} / {b:?}");
         assert_readable(&a, &harsh);
         assert_readable(&b, &soft);
+    }
+
+    #[test]
+    fn a_small_bright_sun_is_not_ignored() {
+        // Soleil blanc de 2 % de l'image : pas une couleur dominante, mais le
+        // texte doit rester lisible par-dessus.
+        let mut rgb = Vec::new();
+        for y in 0..50 {
+            for x in 0..50 {
+                let sun = (20..27).contains(&x) && (20..27).contains(&y);
+                rgb.extend_from_slice(if sun { &[255, 255, 255] } else { &[20, 24, 60] });
+            }
+        }
+        let sample = ImageSample::from_rgb(50, 50, &rgb).unwrap();
+        let with_sun = Appearance::default().adapted_to_image(&sample);
+        let night = Appearance::default().adapted_to_image(&bands(50, &[("#14183c", 50)]));
+        assert!(with_sun.glass_opacity > night.glass_opacity);
+        assert_readable(&with_sun, &sample);
     }
 
     #[test]

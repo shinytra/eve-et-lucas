@@ -192,7 +192,8 @@ pub fn import_theme(state: State<'_, AppearanceState>, code: String) -> Result<A
 }
 
 /// Couleurs et verre tirés de l'image de fond. L'interface envoie l'image
-/// réduite (128 px de côté au plus), en octets RVB encodés en base64.
+/// réduite (96 px de côté ; le cœur accepte jusqu'à 128 px), en octets RVB
+/// encodés en base64.
 #[tauri::command]
 pub fn adapt_to_image(
     state: State<'_, AppearanceState>,
