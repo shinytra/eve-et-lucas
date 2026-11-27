@@ -61,7 +61,7 @@ impl ImageSample {
         if rgb.len() != width * height * 3 {
             return Err(invalid("taille incohérente"));
         }
-        let pixels = rgb.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect();
+        let pixels = rgb.as_chunks::<3>().0.to_vec();
         Ok(Self {
             width,
             height,
