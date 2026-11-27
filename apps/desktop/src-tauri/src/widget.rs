@@ -117,6 +117,17 @@ mod phone {
             {
                 Ok(c) => {
                     changed |= c;
+                    // Cochée depuis le widget : l'autre est prévenu aussi.
+                    let task = if c {
+                        state.tasks.lock().get(&action.task_id).ok()
+                    } else {
+                        None
+                    };
+                    if let Some(task) = task {
+                        crate::notify::announce(state, |me, at| {
+                            couple_core::notify::Event::task_done(&task, &who, me, at)
+                        });
+                    }
                     done.push(action.id);
                 }
                 // Android la garde : nouvel essai au prochain passage.

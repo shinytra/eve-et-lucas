@@ -61,6 +61,18 @@ pub struct PushConfig {
     /// Adresses ntfy des autres appareils (https, 500 caractères au plus ;
     /// les autres sont ignorées).
     pub targets: Vec<String>,
+    /// Types de nouveautés à afficher sur ce téléphone (`couple_core::notify`) ;
+    /// les autres annonces reçues sont ignorées.
+    #[serde(default)]
+    pub notify: Vec<String>,
+    /// Prénom choisi pour ce téléphone (vide s'il ne l'a pas été) : ses
+    /// propres ajouts, faits sur le PC, ne lui sont pas annoncés.
+    #[serde(default)]
+    pub owner: String,
+    /// Identifiants des appareils appairés : une annonce d'un appareil retiré
+    /// est ignorée.
+    #[serde(default)]
+    pub devices: Vec<String>,
 }
 
 /// La clé n'apparaît jamais dans les journaux.
@@ -71,6 +83,9 @@ impl std::fmt::Debug for PushConfig {
             .field("who", &self.who)
             .field("device", &self.device)
             .field("targets", &self.targets)
+            .field("notify", &self.notify)
+            .field("owner", &self.owner)
+            .field("devices", &self.devices)
             .finish()
     }
 }
@@ -282,6 +297,9 @@ mod tests {
             who: "Eve".into(),
             device: "d".into(),
             targets: vec!["https://ntfy.sh/upAbc?up=1".into()],
+            notify: vec!["note".into()],
+            owner: "Eve".into(),
+            devices: vec!["d".into(), "pc".into()],
         };
         assert_eq!(
             serde_json::to_value(&config).unwrap(),
@@ -290,6 +308,9 @@ mod tests {
                 "who": "Eve",
                 "device": "d",
                 "targets": ["https://ntfy.sh/upAbc?up=1"],
+                "notify": ["note"],
+                "owner": "Eve",
+                "devices": ["d", "pc"],
             })
         );
         // La clé ne fuit pas dans les journaux.

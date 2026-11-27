@@ -12,6 +12,7 @@ pub mod dates;
 pub mod devices;
 pub mod files;
 pub mod notes;
+pub mod notify;
 pub mod push;
 pub mod sync;
 pub mod tasks;
@@ -36,6 +37,8 @@ pub enum Error {
     InvalidEndpoint,
     #[error("message de réveil illisible ou falsifié")]
     InvalidPush,
+    #[error("type de notification inconnu : {0}")]
+    UnknownNotification(String),
     #[error("la note {0} n'existe pas")]
     NoteNotFound(String),
     #[error("une note doit avoir un titre ou un contenu")]

@@ -13,7 +13,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use couple_core::Note;
+use couple_core::{notify::Event, Note};
 use tauri::{Manager, State};
 
 mod animes;
@@ -23,6 +23,7 @@ mod dates;
 #[cfg(desktop)]
 mod desktop;
 mod files;
+mod notify;
 mod push;
 mod reminders;
 mod store;
@@ -90,6 +91,7 @@ fn add_note(
         doc.add(&author, &title, &body, now_ms())
     })?;
     state.sync_wanted.notify_one();
+    notify::announce(&state, |me, at| Event::note_added(&note, me, at));
     Ok(note)
 }
 
@@ -227,6 +229,8 @@ pub fn run() {
             appearance::import_theme,
             appearance::get_wallpaper,
             appearance::set_wallpaper,
+            notify::notification_settings,
+            notify::set_notification,
         ])
         .run(tauri::generate_context!());
 
