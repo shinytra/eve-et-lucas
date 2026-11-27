@@ -116,6 +116,7 @@
           </div>
           <a href="#maison" id="accueil-arrivee" class="carte verre carte-petite" hidden></a>
           <a href="#notes" id="accueil-note" class="carte verre carte-petite" hidden></a>
+          <a href="#parametres" id="accueil-maj" class="carte verre carte-petite" hidden></a>
         </div>
         <p id="accueil-error" role="alert" hidden></p>
       </section>
@@ -321,6 +322,18 @@
           <a href="#maison">Arrivée à la maison</a>
           <a href="#appareils">Appareils</a>
         </div>
+        <!-- Mise à jour depuis l'appli (maj.js, src/update.rs). -->
+        <h3>Mise à jour</h3>
+        <div class="maj">
+          <p id="maj-etat" class="meta">Version installée : …</p>
+          <p id="maj-notes" class="maj-notes" hidden></p>
+          <div id="maj-barre" class="barre-episodes maj-barre" hidden><i></i></div>
+          <div class="maj-actions">
+            <button type="button" id="maj-installer" class="principal" hidden>Mettre à jour</button>
+            <button type="button" id="maj-chercher">Rechercher une mise à jour</button>
+          </div>
+          <p id="maj-error" role="alert" hidden></p>
+        </div>
       </section>
 
       <section id="ecran-fichiers" data-ecran="fichiers" aria-labelledby="files-title" class="files verre">
@@ -506,5 +519,6 @@
     <script src="notifications.js"></script>
     <script src="devices.js"></script>
     <script src="accueil.js"></script>
+    <script src="maj.js"></script>
   </body>
 </html>
