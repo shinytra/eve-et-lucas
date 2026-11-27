@@ -18,6 +18,7 @@ use std::{
 use couple_core::{
     anilist,
     animes::{self, valid_cover_url},
+    notify::Event,
     Anime, AnimeInfo,
 };
 use tauri::{ipc::Response, AppHandle, Emitter, State};
@@ -52,7 +53,7 @@ fn cover_path(state: &AppState, anilist_id: i64) -> PathBuf {
 /// Client HTTPS avec les autorités de certification de Mozilla
 /// (`webpki-roots`) : le vérificateur du système demande, sur Android, une
 /// initialisation côté Java que l'appli n'a pas.
-fn client() -> Result<reqwest::Client, String> {
+pub(crate) fn client() -> Result<reqwest::Client, String> {
     let roots = rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
     let tls = rustls::ClientConfig::builder_with_provider(Arc::new(
         rustls::crypto::ring::default_provider(),
@@ -129,6 +130,7 @@ pub fn add_anime(
         .animes
         .change("d'ajouter l'animé", |doc| doc.add(&author, info, now_ms()))?;
     changed(&state);
+    crate::notify::announce(&state, |me, at| Event::anime_added(&anime, me, at));
     Ok(anime)
 }
 
@@ -139,10 +141,18 @@ pub fn set_anime_episode(
     episode: u32,
     by: String,
 ) -> Result<Anime, String> {
-    let anime = state.animes.change("de noter l'épisode", |doc| {
-        doc.set_episode(&id, episode, &by, now_ms())
+    // Seulement en avançant : revenir en arrière (erreur de clic) ne prévient pas.
+    let (anime, advanced) = state.animes.change("de noter l'épisode", |doc| {
+        let before = doc.get(&id).map(|a| a.episode).ok();
+        doc.set_episode(&id, episode, &by, now_ms()).map(|a| {
+            let advanced = before.is_some_and(|b| a.episode > b);
+            (a, advanced)
+        })
     })?;
     changed(&state);
+    if advanced {
+        crate::notify::announce(&state, |me, at| Event::anime_episode(&anime, &by, me, at));
+    }
     Ok(anime)
 }
 

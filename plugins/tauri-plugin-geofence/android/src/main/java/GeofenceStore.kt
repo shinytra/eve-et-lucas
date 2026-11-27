@@ -15,14 +15,17 @@ data class PendingArrival(val id: String, val at: Long)
 
 /**
  * Réglages du réveil par ntfy, fournis par l'appli : clé commune (base64),
- * qui porte ce téléphone, son identifiant iroh et les adresses ntfy des
- * autres appareils.
+ * qui porte ce téléphone, son identifiant iroh, les adresses ntfy des
+ * autres appareils et les types de nouveautés à afficher ici.
  */
 data class PushConfig(
   val key: String,
   val who: String,
   val device: String,
-  val targets: List<String>
+  val targets: List<String>,
+  val notify: List<String> = EventPayload.KINDS.toList(),
+  val owner: String = "",
+  val devices: List<String> = emptyList()
 )
 
 /**
@@ -52,6 +55,13 @@ object GeofenceStore {
   private const val KEY_PUSH_ENDPOINT = "push_endpoint"
   private const val KEY_RUNG = "rung_ids"
   private const val KEY_RECEIVED = "received"
+  private const val KEY_PUSH_NOTIFY = "push_notify"
+  private const val KEY_PUSH_OWNER = "push_owner"
+  private const val KEY_PUSH_DEVICES = "push_devices"
+  private const val KEY_SHOWN = "shown_event_ids"
+
+  /** Nouveautés « déjà affichées » gardées (les plus récentes). */
+  private const val MAX_SHOWN = 100
 
   /** Anti-rebond : deux entrées à moins de 5 min ne font qu'une arrivée. */
   const val DEBOUNCE_MS = 5 * 60 * 1000L
@@ -194,6 +204,9 @@ object GeofenceStore {
       .putString(KEY_PUSH_WHO, config.who)
       .putString(KEY_PUSH_DEVICE, config.device)
       .putString(KEY_PUSH_TARGETS, targets.toString())
+      .putString(KEY_PUSH_NOTIFY, JSONArray(config.notify).toString())
+      .putString(KEY_PUSH_OWNER, config.owner)
+      .putString(KEY_PUSH_DEVICES, JSONArray(config.devices).toString())
       .commit()
   }
 
@@ -211,7 +224,12 @@ object GeofenceStore {
       key = p.getString(KEY_PUSH_KEY, null) ?: "",
       who = p.getString(KEY_PUSH_WHO, null) ?: "",
       device = p.getString(KEY_PUSH_DEVICE, null) ?: "",
-      targets = targets
+      targets = targets,
+      // Jamais reçu (appli pas encore rouverte depuis la mise à jour) : tout
+      // est activé, comme dans l'appli.
+      notify = if (p.contains(KEY_PUSH_NOTIFY)) readStrings(p, KEY_PUSH_NOTIFY) else EventPayload.KINDS.toList(),
+      owner = p.getString(KEY_PUSH_OWNER, null) ?: "",
+      devices = readStrings(p, KEY_PUSH_DEVICES)
     )
   }
 
@@ -248,6 +266,21 @@ object GeofenceStore {
   fun claimRing(context: Context, id: String): Boolean {
     if (readStrings(prefs(context), KEY_RUNG).contains(id)) return false
     markRung(context, listOf(id))
+    return true
+  }
+
+  /**
+   * Note que la nouveauté [id] est affichée ici. Renvoie `false` si elle
+   * l'était déjà (même message reçu deux fois).
+   */
+  @Synchronized
+  fun claimEvent(context: Context, id: String): Boolean {
+    val p = prefs(context)
+    val shown = readStrings(p, KEY_SHOWN)
+    if (shown.contains(id)) return false
+    shown.add(id)
+    while (shown.size > MAX_SHOWN) shown.removeAt(0)
+    p.edit().putString(KEY_SHOWN, JSONArray(shown).toString()).commit()
     return true
   }
 

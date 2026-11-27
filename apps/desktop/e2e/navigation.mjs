@@ -31,7 +31,7 @@ await sleep(1500);
 check("l'appli s'ouvre sur l'accueil", (await visibles()) === "accueil");
 check("le menu latéral est affiché sur PC", (await js("(() => getComputedStyle(document.querySelector('.nav .marque')).display)()")) !== "none");
 
-for (const ecran of ["taches", "dates", "notes", "animes", "fichiers", "maison", "appareils"]) {
+for (const ecran of ["taches", "dates", "notes", "animes", "fichiers", "maison", "notifications", "appareils"]) {
   await call("webview_interact", { action: "click", selector: `#nav a[data-ecran="${ecran}"]` });
   await sleep(500);
   check(`le menu ouvre l'écran « ${ecran} » (et lui seul)`, (await visibles()) === ecran);
@@ -39,7 +39,7 @@ for (const ecran of ["taches", "dates", "notes", "animes", "fichiers", "maison",
 }
 await js("(() => { history.back(); return true })()");
 await sleep(500);
-check("le retour revient à l'écran précédent", (await visibles()) === "maison");
+check("le retour revient à l'écran précédent", (await visibles()) === "notifications");
 
 // Accueil : une tâche cochée depuis l'accueil est faite partout.
 const added = await call("ipc_execute_command", { command: "add_task", args: { author: "Lucas", title: "Tâche accueil MCP", assignee: "", dueAt: null } });

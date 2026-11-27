@@ -51,6 +51,38 @@ class PushReceiverService : PushService() {
     GeofencePlugin.notifyPushEndpoint("")
   }
 
+  /**
+   * Nouveauté (note ajoutée, tâche faite…) : mêmes règles que
+   * `Event::should_show` du cœur Rust. Rien n'est gardé pour l'appli : la
+   * synchro apportera le changement lui-même.
+   */
+  private fun handleEvent(event: EventMessage) {
+    val config = GeofenceStore.pushConfig(this)
+    if (event.kind !in config.notify) {
+      Log.i(TAG, "Nouveauté ignorée : type « ${event.kind} » coupé sur ce téléphone")
+      return
+    }
+    if (event.device == config.device) return
+    // Liste connue (appli rouverte depuis la mise à jour) : seulement des
+    // appareils appairés. Un appareil retiré garde peut-être l'ancienne clé.
+    if (config.devices.isNotEmpty() && event.device !in config.devices) {
+      Log.w(TAG, "Nouveauté ignorée : appareil qui n'est plus appairé")
+      return
+    }
+    val owner = config.owner.trim()
+    if (owner.isNotEmpty() && owner.equals(event.who.trim(), ignoreCase = true)) {
+      Log.i(TAG, "Nouveauté ignorée : faite par la personne qui porte ce téléphone")
+      return
+    }
+    val age = System.currentTimeMillis() - event.at
+    if (age > EventPayload.SHOW_WITHIN_MS || age < -EventPayload.CLOCK_SKEW_MS) {
+      Log.w(TAG, "Nouveauté ignorée : trop ancienne (ou horloge décalée)")
+      return
+    }
+    if (!GeofenceStore.claimEvent(this, event.id)) return
+    NewsNotifier.show(this, event)
+  }
+
   private fun handleMessage(content: ByteArray) {
     val key = PushCrypto.decodeKey(GeofenceStore.pushConfig(this).key)
     if (key == null) {
@@ -62,9 +94,15 @@ class PushReceiverService : PushService() {
       Log.w(TAG, "Message ntfy ignoré : illisible ou pas chiffré avec notre clé")
       return
     }
-    val arrival = ArrivalPayload.decode(String(plain, Charsets.UTF_8))
+    val text = String(plain, Charsets.UTF_8)
+    val arrival = ArrivalPayload.decode(text)
     if (arrival == null) {
-      Log.w(TAG, "Message ntfy ignoré : pas une arrivée (ou version inconnue)")
+      val event = EventPayload.decode(text)
+      if (event == null) {
+        Log.w(TAG, "Message ntfy ignoré : ni arrivée ni nouveauté (ou version inconnue)")
+      } else {
+        handleEvent(event)
+      }
       return
     }
     // Relue ici : la configuration peut avoir changé depuis la clé.

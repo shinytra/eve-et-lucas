@@ -85,6 +85,74 @@ object PushCrypto {
   }
 }
 
+/** Une nouveauté annoncée par un autre appareil (textes déjà prêts à afficher). */
+data class EventMessage(
+  val kind: String,
+  val id: String,
+  val who: String,
+  val device: String,
+  val at: Long,
+  val item: String,
+  val title: String,
+  val body: String
+)
+
+/**
+ * Clair des nouveautés (préparé par `couple_core::notify`) :
+ * `{"v":1,"kind":"note","id":…,"who":…,"device":…,"at":…,"item":…,"title":…,"body":…}`.
+ * Type inconnu, autre version ou champ invalide : ignoré.
+ */
+object EventPayload {
+  /** Les types de `couple_core::notify::KINDS`. */
+  val KINDS = setOf("note", "tache", "tache-faite", "date", "anime", "fichier")
+  const val SHOW_WITHIN_MS = 12 * 60 * 60 * 1000L
+  const val CLOCK_SKEW_MS = 60_000L
+  private const val MAX_TEXT = 120
+  private const val MAX_WHO_LEN = 64
+  private const val MAX_ID_LEN = 128
+
+  private fun validId(id: String): Boolean =
+    id.isNotEmpty() && id.length <= MAX_ID_LEN && id.all { it in '!'..'~' }
+
+  /** Coupe à [MAX_TEXT] caractères, sur une seule ligne. */
+  private fun short(text: String): String {
+    val flat = text.split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ")
+      .filter { !it.isISOControl() }
+    // Compté en caractères (points de code), comme en Rust : un émoji compte pour un.
+    if (flat.codePointCount(0, flat.length) <= MAX_TEXT) return flat
+    return flat.substring(0, flat.offsetByCodePoints(0, MAX_TEXT - 1)) + "…"
+  }
+
+  fun decode(text: String): EventMessage? {
+    val json = try {
+      JSONObject(text)
+    } catch (e: Exception) {
+      return null
+    }
+    val v = json.opt("v")
+    if (!((v is Int && v == 1) || (v is Long && v == 1L))) return null
+    val kind = json.opt("kind") as? String ?: return null
+    if (kind !in KINDS) return null
+    val id = json.opt("id") as? String ?: return null
+    if (!validId(id)) return null
+    val who = (json.opt("who") as? String)?.trim() ?: return null
+    if (who.isEmpty() || who.codePointCount(0, who.length) > MAX_WHO_LEN) return null
+    val device = json.opt("device") as? String ?: return null
+    if (!validId(device)) return null
+    val item = json.opt("item") as? String ?: ""
+    if (item.isNotEmpty() && !validId(item)) return null
+    val title = short(json.opt("title") as? String ?: return null)
+    if (title.isEmpty()) return null
+    val body = short(json.opt("body") as? String ?: "")
+    val at = when (val raw = json.opt("at")) {
+      is Int -> raw.toLong()
+      is Long -> raw
+      else -> return null
+    }
+    return EventMessage(kind, id, who, device, at, item, title, body)
+  }
+}
+
 /** Une arrivée transmise par ntfy (celle d'un autre appareil, ou la nôtre à envoyer). */
 data class ArrivalMessage(val id: String, val who: String, val device: String, val at: Long)
 

@@ -99,6 +99,9 @@ pub fn add_date(
         doc.add(&author, &input, now_ms())
     })?;
     changed(&state);
+    crate::notify::announce(&state, |me, at| {
+        couple_core::notify::Event::date_added(&date, me, at)
+    });
     Ok(date)
 }
 

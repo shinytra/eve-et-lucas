@@ -50,6 +50,9 @@ class PushConfigArgs {
   var who: String? = null
   var device: String? = null
   var targets: List<String>? = null
+  var notify: List<String>? = null
+  var owner: String? = null
+  var devices: List<String>? = null
 }
 
 @InvokeArg
@@ -227,7 +230,10 @@ class GeofencePlugin(private val activity: Activity) : Plugin(activity) {
       key = key,
       who = args.who.orEmpty().trim(),
       device = args.device.orEmpty().trim(),
-      targets = PushSender.validTargets(args.targets.orEmpty())
+      targets = PushSender.validTargets(args.targets.orEmpty()),
+      notify = args.notify.orEmpty().filter { it in EventPayload.KINDS }.distinct(),
+      owner = args.owner.orEmpty().trim(),
+      devices = args.devices.orEmpty().map { it.trim() }.filter { it.isNotEmpty() }.distinct()
     )
     GeofenceStore.savePushConfig(activity, config)
     invoke.resolve()
