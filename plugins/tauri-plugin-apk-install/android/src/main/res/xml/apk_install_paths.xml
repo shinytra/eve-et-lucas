@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Seul dossier partagé : l'APK de mise à jour téléchargé par l'appli. -->
+    <cache-path name="maj" path="maj/" />
+</paths>
