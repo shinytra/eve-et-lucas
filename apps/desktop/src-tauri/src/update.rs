@@ -1,6 +1,6 @@
 //! Mise à jour de l'appli depuis l'appli (écran Paramètres).
 //!
-//! Les versions sont publiées sur le dépôt public de `couple_core::update`,
+//! Les versions sont publiées sur le dépôt (public) de `couple_core::update`,
 //! avec un fichier `latest.json`.
 //!
 //! - **PC** : plugin updater de Tauri. Il télécharge l'installateur, vérifie

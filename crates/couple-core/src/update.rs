@@ -26,8 +26,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Error, Result};
 
-/// Dépôt public où sont publiées les versions (le code reste privé).
-pub const RELEASES_REPO: &str = "shinytra/eve-et-lucas-versions";
+/// Dépôt public où sont publiées les versions (celui du code).
+pub const RELEASES_REPO: &str = "shinytra/eve-et-lucas";
 
 /// Adresse du fichier de la dernière version.
 pub fn manifest_url() -> String {
@@ -243,8 +243,7 @@ mod tests {
     fn adresse_et_empreinte_verifiees() {
         for url in [
             "https://example.com/v0.5.0/a.apk".to_owned(),
-            "http://github.com/shinytra/eve-et-lucas-versions/releases/download/v0.5.0/a.apk"
-                .to_owned(),
+            download_prefix().replace("https://", "http://") + "v0.5.0/a.apk",
             format!("{}../../autre/a.apk", download_prefix()),
             format!("{}v0.5.0/a.apk?x=1", download_prefix()),
             format!("{}v0.5.0//a.apk", download_prefix()),

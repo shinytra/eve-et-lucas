@@ -7,7 +7,7 @@ name: Version à télécharger
 # - Pousser une étiquette `v0.1.0` (ou lancer le workflow à la main depuis
 #   l'onglet Actions) publie la version de `tauri.conf.json`.
 # - Une PR qui modifie ce fichier construit tout sans rien publier.
-# - Publiée sur le dépôt public de `couple_core::update::RELEASES_REPO` :
+# - Publiée sur ce dépôt (public), celui de `couple_core::update::RELEASES_REPO` :
 #   l'appli y lit latest.json pour se mettre à jour toute seule.
 
 on:
@@ -163,9 +163,8 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: [windows, android]
     runs-on: ubuntu-latest
-    # Publication avec VERSIONS_TOKEN sur le dépôt public : rien à écrire ici.
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -184,6 +183,11 @@ jobs:
             exit 1
           fi
           repo=$(grep -oP 'RELEASES_REPO: &str = "\K[^"]+' crates/couple-core/src/update.rs)
+          # L'appli lit les versions là où elles sont publiées : ce dépôt.
+          if [ "$repo" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::RELEASES_REPO ($repo) n'est pas ce dépôt ($GITHUB_REPOSITORY) : l'appli ne trouverait pas la version."
+            exit 1
+          fi
           mkdir publie
           exe=$(find construit/windows -name '*.exe' | head -n 1)
           sig=$(find construit/windows -name '*.exe.sig' | head -n 1)
@@ -219,33 +223,21 @@ jobs:
             echo "repo=$repo"
           } >> "$GITHUB_OUTPUT"
         id: fichiers
-      # Le code reste privé : les versions sont publiées sur un dépôt public à
-      # part (seul endroit que l'appli peut lire sans mot de passe), avec le
-      # secret VERSIONS_TOKEN (jeton « fine-grained » limité à ce dépôt,
-      # permission Contents en écriture). Ce dépôt doit avoir au moins un
-      # commit (README) : l'étiquette de la version y est posée sur sa branche
-      # principale.
+      # Le dépôt est public : l'appli lit latest.json sans mot de passe.
       - name: Publier la version
         env:
-          GH_TOKEN: ${{ secrets.VERSIONS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.fichiers.outputs.tag }}
           VERSION: ${{ steps.fichiers.outputs.version }}
           REPO: ${{ steps.fichiers.outputs.repo }}
         run: |
           set -euo pipefail
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::error::Secret VERSIONS_TOKEN manquant : impossible de publier sur $REPO."
-            exit 1
-          fi
-          if ! gh api "repos/$REPO/commits?per_page=1" > /dev/null 2>&1; then
-            echo "::error::Le dépôt $REPO est introuvable, vide (créer un README) ou le jeton n'y a pas accès."
-            exit 1
-          fi
           if gh release view "$TAG" --repo "$REPO" > /dev/null 2>&1; then
             gh release upload "$TAG" publie/* --clobber --repo "$REPO"
           else
             gh release create "$TAG" publie/* \
               --repo "$REPO" \
+              --target "$GITHUB_SHA" \
               --title "Eve & Lucas $VERSION" \
               --notes-file .github/release-notes.md
           fi
