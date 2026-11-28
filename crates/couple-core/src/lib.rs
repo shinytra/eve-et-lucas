@@ -12,6 +12,7 @@ pub mod cadres;
 pub mod dates;
 pub mod devices;
 pub mod files;
+pub mod galerie;
 pub mod music;
 pub mod notes;
 pub mod notify;
@@ -30,6 +31,7 @@ pub use cadres::{Cadre, CadreView, CadresDoc};
 pub use dates::{DateInput, DateReminder, DatesDoc, Day, ImportantDate, UpcomingDate};
 pub use devices::{Device, DevicesDoc};
 pub use files::{FilesDoc, SharedFile};
+pub use galerie::{Album, GalerieDoc, Photo, PhotoView};
 pub use music::{Music, MusicDoc};
 pub use notes::{Note, NotesDoc};
 pub use presence::{PresenceDoc, PresenceEvent};
@@ -89,6 +91,12 @@ pub enum Error {
     CadreNotFound(String),
     #[error("widget photo : {0}")]
     InvalidCadre(String),
+    #[error("la photo {0} n'existe pas")]
+    PhotoNotFound(String),
+    #[error("l'album {0} n'existe pas")]
+    AlbumNotFound(String),
+    #[error("galerie : {0}")]
+    InvalidGalerie(String),
     #[error("la date {0} n'existe pas")]
     DateNotFound(String),
     #[error("date invalide : {0}")]

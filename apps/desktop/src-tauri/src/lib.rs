@@ -24,6 +24,7 @@ mod dates;
 #[cfg(desktop)]
 mod desktop;
 mod files;
+mod galerie;
 mod music;
 mod notify;
 mod photos;
@@ -241,6 +242,13 @@ pub fn run() {
             files::download_file,
             files::file_content,
             files::save_file,
+            galerie::list_galerie,
+            galerie::add_photo,
+            galerie::move_photo,
+            galerie::remove_photo,
+            galerie::add_album,
+            galerie::rename_album,
+            galerie::remove_album,
             photos::list_cadres,
             photos::add_cadre,
             photos::set_cadre_fit,

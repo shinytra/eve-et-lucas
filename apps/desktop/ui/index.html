@@ -48,6 +48,10 @@
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 3v10.6A4 4 0 1 0 14 17V7h5V3Z" /></svg>
           <span>Musiques</span>
         </a>
+        <a href="#galerie" data-ecran="galerie" class="secondaire">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2ZM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5Z" /></svg>
+          <span>Galerie</span>
+        </a>
         <a href="#fichiers" data-ecran="fichiers" class="secondaire">
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
           <span>Fichiers</span>
@@ -366,6 +370,31 @@
         </div>
       </section>
 
+      <section id="ecran-galerie" data-ecran="galerie" aria-labelledby="galerie-title" class="galerie verre">
+        <div class="ecran-tete">
+          <h2 id="galerie-title">Galerie</h2>
+          <input id="galerie-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden />
+          <button type="button" id="galerie-ajout" class="ajouter principal">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6Z" /></svg>
+            <span>Ajouter des photos</span>
+          </button>
+        </div>
+        <div id="galerie-filtres" class="filtres galerie-filtres" role="group" aria-label="Albums"></div>
+        <form id="album-form" class="album-form" novalidate hidden>
+          <input id="album-nom" type="text" maxlength="60" autocomplete="off" aria-label="Nom de l'album" placeholder="Nom de l'album" />
+          <button type="submit" id="album-valider" class="principal">Créer</button>
+          <button type="button" id="album-annuler">Annuler</button>
+        </form>
+        <div id="album-actions" class="album-actions" hidden>
+          <span id="album-titre" class="meta"></span>
+          <span id="album-boutons" class="actions"></span>
+        </div>
+        <p id="galerie-status" class="meta" hidden></p>
+        <p id="galerie-error" role="alert" hidden></p>
+        <p id="galerie-empty" class="meta" hidden></p>
+        <ul id="galerie-grille" class="galerie-grille"></ul>
+      </section>
+
       <section id="ecran-fichiers" data-ecran="fichiers" aria-labelledby="files-title" class="files verre">
         <div class="ecran-tete">
           <h2 id="files-title">Fichiers partagés</h2>
@@ -427,6 +456,28 @@
     </main>
 
     <!-- Feuille « Plus » du téléphone : les écrans qui n'ont pas d'onglet. -->
+    <div id="visionneuse" class="visionneuse" role="dialog" aria-modal="true" aria-label="Photo" hidden>
+      <div class="visionneuse-fond"></div>
+      <div class="visionneuse-corps verre">
+        <div class="visionneuse-image">
+          <button type="button" id="vis-prec" class="icone" aria-label="Photo précédente">‹</button>
+          <img id="vis-img" alt="" />
+          <p id="vis-attente" class="meta" hidden></p>
+          <button type="button" id="vis-suiv" class="icone" aria-label="Photo suivante">›</button>
+        </div>
+        <p id="vis-meta" class="meta"></p>
+        <div class="visionneuse-actions">
+          <label>
+            <span>Album</span>
+            <select id="vis-album"></select>
+          </label>
+          <span id="vis-boutons" class="actions"></span>
+          <button type="button" id="vis-fermer">Fermer</button>
+        </div>
+        <p id="vis-error" role="alert" hidden></p>
+      </div>
+    </div>
+
     <div id="plus" class="feuille" hidden>
       <div class="feuille-fond"></div>
       <div class="feuille-corps" role="dialog" aria-label="Plus d'écrans">
@@ -439,6 +490,10 @@
           <a href="#musiques" class="tuile">
             <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 3v10.6A4 4 0 1 0 14 17V7h5V3Z" /></svg>
             <span>Musiques</span>
+          </a>
+          <a href="#galerie" class="tuile">
+            <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2ZM8.5 13.5l2.5 3 3.5-4.5 4.5 6H5Z" /></svg>
+            <span>Galerie</span>
           </a>
           <a href="#fichiers" class="tuile">
             <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /></svg>
@@ -553,6 +608,7 @@
     <script src="dates.js"></script>
     <script src="files.js"></script>
     <script src="photos.js"></script>
+    <script src="galerie.js"></script>
     <script src="arrivals.js"></script>
     <script src="notifications.js"></script>
     <script src="devices.js"></script>
