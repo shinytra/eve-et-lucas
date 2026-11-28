@@ -8,8 +8,8 @@ use std::{
 };
 
 use couple_core::{
-    AnimesDoc, ArrivalsDoc, CadresDoc, DatesDoc, DevicesDoc, FilesDoc, MusicDoc, NotesDoc,
-    PresenceDoc, PushDoc, SyncState, Syncable, TasksDoc,
+    AnimesDoc, ArrivalsDoc, CadresDoc, DatesDoc, DevicesDoc, FilesDoc, GalerieDoc, MusicDoc,
+    NotesDoc, PresenceDoc, PushDoc, SyncState, Syncable, TasksDoc,
 };
 use couple_sync::{
     iroh::{EndpointId, SecretKey},
@@ -113,6 +113,15 @@ impl Persist for CadresDoc {
     }
     fn save(&mut self) -> Vec<u8> {
         CadresDoc::save(self)
+    }
+}
+
+impl Persist for GalerieDoc {
+    fn load(bytes: &[u8]) -> couple_core::Result<Self> {
+        GalerieDoc::load(bytes)
+    }
+    fn save(&mut self) -> Vec<u8> {
+        GalerieDoc::save(self)
     }
 }
 
@@ -245,6 +254,7 @@ pub const DEVICES_DOC: &str = "devices";
 pub const ANIMES_DOC: &str = "animes";
 pub const MUSIC_DOC: &str = "musiques";
 pub const CADRES_DOC: &str = "cadres";
+pub const GALERIE_DOC: &str = "galerie";
 /// Sur téléphone : taille maximale d'une image téléchargée sans le demander.
 const AUTO_DOWNLOAD_MAX: u64 = 10 * 1024 * 1024;
 
@@ -265,6 +275,8 @@ pub struct AppState {
     pub music: Persisted<MusicDoc>,
     /// Images et GIF du widget photo (téléphone).
     pub cadres: Persisted<CadresDoc>,
+    /// Galerie photos (en vrac ou en albums).
+    pub galerie: Persisted<GalerieDoc>,
     pub devices: Persisted<DevicesDoc>,
     /// Messages à montrer au démarrage (fichier illisible, etc.).
     pub startup_warnings: Vec<String>,
@@ -318,6 +330,7 @@ impl AppState {
         let animes = Persisted::load(data_dir.join("animes.automerge"), &mut startup_warnings)?;
         let music = Persisted::load(data_dir.join("musiques.automerge"), &mut startup_warnings)?;
         let cadres = Persisted::load(data_dir.join("cadres.automerge"), &mut startup_warnings)?;
+        let galerie = Persisted::load(data_dir.join("galerie.automerge"), &mut startup_warnings)?;
         let devices = Persisted::load(data_dir.join("devices.automerge"), &mut startup_warnings)?;
         let secret = load_or_create_key(&data_dir.join("device.key"))?;
         let self_id = secret.public();
@@ -332,6 +345,7 @@ impl AppState {
             animes,
             music,
             cadres,
+            galerie,
             devices,
             startup_warnings,
             notices: Mutex::new(Vec::new()),
@@ -421,6 +435,9 @@ impl AppState {
             CADRES_DOC => self.cadres.change("de synchroniser le widget photo", |d| {
                 d.receive_sync_message(state, message)
             }),
+            GALERIE_DOC => self.galerie.change("de synchroniser la galerie", |d| {
+                d.receive_sync_message(state, message)
+            }),
             DEVICES_DOC => self.devices.change("de synchroniser les appareils", |d| {
                 d.receive_sync_message(state, message)
             }),
@@ -440,6 +457,7 @@ impl AppState {
             ANIMES_DOC => Ok(f(&mut *self.animes.lock())),
             MUSIC_DOC => Ok(f(&mut *self.music.lock())),
             CADRES_DOC => Ok(f(&mut *self.cadres.lock())),
+            GALERIE_DOC => Ok(f(&mut *self.galerie.lock())),
             DEVICES_DOC => Ok(f(&mut *self.devices.lock())),
             _ => Err(format!("document inconnu : {doc}")),
         }
@@ -461,6 +479,7 @@ impl Store for AppState {
             DATES_DOC.into(),
             MUSIC_DOC.into(),
             CADRES_DOC.into(),
+            GALERIE_DOC.into(),
         ]
     }
 
@@ -730,8 +749,23 @@ pub(crate) mod tests {
             })
             .unwrap();
 
+        let first = pc.files.lock().list().remove(0);
+        pc.galerie
+            .change("d'ajouter", |d| {
+                let album = d.add_album("Eve", "Nous", 1)?;
+                d.add_photo("Eve", &first, &album.id, 2)
+            })
+            .unwrap();
+
         for doc in [
-            NOTES_DOC, TASKS_DOC, ANIMES_DOC, DATES_DOC, MUSIC_DOC, FILES_DOC, CADRES_DOC,
+            NOTES_DOC,
+            TASKS_DOC,
+            ANIMES_DOC,
+            DATES_DOC,
+            MUSIC_DOC,
+            FILES_DOC,
+            CADRES_DOC,
+            GALERIE_DOC,
         ] {
             let (mut s_pc, mut s_phone) = (SyncState::new(), SyncState::new());
             for _ in 0..10 {
@@ -756,6 +790,8 @@ pub(crate) mod tests {
         assert_eq!(reloaded.music.lock().list().len(), 1);
         let files = reloaded.files.lock().list();
         assert_eq!(reloaded.cadres.lock().list(&files).len(), 1);
+        assert_eq!(reloaded.galerie.lock().photos(&files).len(), 1);
+        assert_eq!(reloaded.galerie.lock().albums().len(), 1);
         assert!(phone.generate("inconnu", &mut SyncState::new()).is_err());
         fs::remove_dir_all(a).unwrap();
         fs::remove_dir_all(b).unwrap();

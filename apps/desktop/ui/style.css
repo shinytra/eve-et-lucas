@@ -2748,3 +2748,215 @@ body.bienvenue-ouverte {
   margin: 0;
   color: var(--danger);
 }
+
+/* ---------- Galerie photos ---------- */
+
+.galerie {
+  display: grid;
+  gap: 12px;
+}
+
+.galerie-filtres .chip-nouveau {
+  border-style: dashed;
+}
+
+.album-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.album-form[hidden],
+.album-actions[hidden] {
+  display: none;
+}
+
+.album-form input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.album-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.album-actions .actions {
+  display: flex;
+  gap: 8px;
+}
+
+#galerie-status,
+#galerie-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+#galerie-error,
+#vis-error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.galerie-grille {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 6px;
+}
+
+.galerie-photo {
+  animation: item-entree 0.35s var(--doux) both;
+}
+
+.galerie-photo button {
+  display: block;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: calc(var(--radius) * 0.5);
+  background: var(--field-bg);
+}
+
+.galerie-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.galerie-photo img:not([src]) {
+  visibility: hidden;
+}
+
+.galerie-photo button.absente::after {
+  content: attr(data-texte);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 6px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+/* Visionneuse : photo entière par-dessus l'écran. */
+.visionneuse {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  display: grid;
+  place-items: center;
+  padding: var(--marge);
+}
+
+.visionneuse[hidden] {
+  display: none;
+}
+
+.visionneuse-fond {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 12, 25, 0.6);
+  animation: fondu 0.25s ease;
+}
+
+.visionneuse-corps {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  width: min(100%, 900px);
+  max-height: 100%;
+  padding: 12px;
+  overflow: auto;
+  animation: feuille-entree 0.4s var(--ressort);
+}
+
+.visionneuse-image {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.visionneuse-image img {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: center;
+  max-width: 100%;
+  max-height: 60vh;
+  border-radius: 12px;
+}
+
+.visionneuse-image img:not([src]) {
+  display: none;
+}
+
+.visionneuse-image .meta {
+  grid-column: 2;
+  grid-row: 1;
+  text-align: center;
+}
+
+.visionneuse-image button:first-child {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.visionneuse-image button:last-child {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+#vis-meta {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.visionneuse-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.visionneuse-actions label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.visionneuse-actions select {
+  flex: 1;
+  min-width: 0;
+}
+
+.visionneuse-actions .actions {
+  display: flex;
+  gap: 8px;
+}
+
+body.visionneuse-ouverte {
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .galerie-photo,
+  .visionneuse-fond,
+  .visionneuse-corps {
+    animation: none;
+  }
+}
